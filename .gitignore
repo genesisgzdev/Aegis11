@@ -1,0 +1,27 @@
+﻿# Aegis11 Git Exclusion Policy
+
+# Executables & Binaries
+*.exe
+*.o
+*.res
+*.obj
+*.pdb
+
+# Local System State (Private)
+aegis_wal.jsonl
+aegis_wal.tmp
+aegis_audit.json
+aegis_audit.json.bak
+aegis_baseline.json
+aegis_journal.json
+
+# IDE & Build Artifacts
+.vs/
+out/
+build/
+*.ps1xml
+
+# Temp files
+*.tmp
+*.log
+aegis_wal.json
