@@ -1,12 +1,13 @@
-# Aegis11
+# Aegis11 System Controller & Mitigation Engine
 
-[![Standard: C++20](https://img.shields.io/badge/Standard-C%2B%2B20-00599C?style=for-the-badge&logo=c%2B%2B&logoColor=white)](https://isocpp.org/)
-[![Platform: Windows 11](https://img.shields.io/badge/Platform-Windows%2011-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://microsoft.com/windows)
-[![Build: MinGW-w64](https://img.shields.io/badge/Build-MinGW--w64%20%7C%20GCC-F0AD4E?style=for-the-badge&logo=gnu&logoColor=white)](https://www.mingw-w64.org/)
+**Overview**
+
+[![Standard: C++17](https://img.shields.io/badge/Standard-C%2B%2B17-00599C?style=for-the-badge&logo=c%2B%2B&logoColor=white)](https://isocpp.org/)
+[![Platform: Windows 11](https://img.shields.io/badge/Platform-Windows%2011-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://www.microsoft.com/windows/)
+[![Build: CMake | MSVC](https://img.shields.io/badge/Build-CMake%20%7C%20MSVC-064F8C?style=for-the-badge&logo=cmake&logoColor=white)](https://cmake.org/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue?style=for-the-badge&logo=gnu-privacy-guard&logoColor=white)](https://www.gnu.org/licenses/gpl-3.0)
 
-
-Aegis11 is an advanced, Anillo-3 (Ring 3) endpoint detection, privacy hardening, and telemetry mitigation framework for Windows 11 systems. Implementing automated threat identification and active state remediation, the suite relies purely on native C++ memory manipulation and OS-level COM/WinRT APIs, explicitly avoiding high-level scripts (PowerShell, Batch) that trigger modern EDR behavioral heuristics.
+Aegis11 is an advanced, Ring-3 endpoint detection, privacy hardening, and telemetry mitigation framework for Windows 11 systems. Implementing automated threat identification and active state remediation, the suite relies purely on native C++ memory manipulation and OS-level COM/WinRT APIs, explicitly avoiding high-level scripts (PowerShell, Batch) that trigger modern EDR behavioral heuristics.
 
 ## Technical Architecture
 
@@ -160,7 +161,7 @@ For high-impact security vulnerabilities (e.g., LPEs, memory corruption):
 
 ---
 
-## Legal & Disclaimers
+## Disclaimer
 
 **THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND.**
 
