@@ -1,12 +1,11 @@
 # Aegis11 System Controller & Mitigation Engine
 
-**Overview**
+## Overview
 
-[![Standard: C++17](https://img.shields.io/badge/Standard-C%2B%2B17-00599C?style=for-the-badge&logo=c%2B%2B&logoColor=white)](https://isocpp.org/)
-[![Platform: Windows 11](https://img.shields.io/badge/Platform-Windows%2011-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://www.microsoft.com/windows/)
-[![Build: CMake | MSVC](https://img.shields.io/badge/Build-CMake%20%7C%20MSVC-064F8C?style=for-the-badge&logo=cmake&logoColor=white)](https://cmake.org/)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue?style=for-the-badge&logo=gnu-privacy-guard&logoColor=white)](https://www.gnu.org/licenses/gpl-3.0)
-
+[![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C?style=for-the-badge&logo=c%2B%2B&logoColor=white)](https://isocpp.org/)
+[![Windows 11](https://img.shields.io/badge/Platform-Windows%2011-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://www.microsoft.com/windows/)
+[![CMake](https://img.shields.io/badge/Build-CMake%20%7C%20MSVC-064F8C?style=for-the-badge&logo=cmake&logoColor=white)](https://cmake.org/)
+[![GPLv3](https://img.shields.io/badge/License-GPLv3-blue?style=for-the-badge&logo=gnu&logoColor=white)](https://www.gnu.org/licenses/gpl-3.0)
 Aegis11 is a state enforcement engine for Windows systems.
 It applies, validates, and continuously reconciles a desired system configuration across multiple OS subsystems, including the registry, services, scheduled tasks, and network filtering layers.
 
