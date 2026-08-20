@@ -18,6 +18,7 @@
 #include <roapi.h>
 
 using namespace Aegis::Core;
+using namespace Aegis::CLI;
 using namespace Aegis::Modules;
 using namespace Aegis::UI;
 
