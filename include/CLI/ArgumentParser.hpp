@@ -11,6 +11,7 @@ namespace Aegis::CLI {
         std::string snapshot_file = "";
         std::string restore_file = "";
         bool show_help = false;
+        bool invalid = false;
     };
 
     class ArgumentParser {
@@ -31,7 +32,9 @@ namespace Aegis::CLI {
                 else if (arg == "--help") config.show_help = true;
                 else if (arg == "--snapshot" && i + 1 < argc) config.snapshot_file = argv[++i];
                 else if (arg == "--restore" && i + 1 < argc) config.restore_file = argv[++i];
+                else if (arg == "--snapshot" || arg == "--restore") config.invalid = true;
                 else if (arg == "--interactive") config.interactive = true;
+                else if (arg != "--reconcile" && arg != "--dry-run") config.invalid = true;
             }
             return config;
         }
