@@ -2,7 +2,7 @@
 
 ## Overview
 
-[![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C?style=for-the-badge&logo=c%2B%2B&logoColor=white)](https://isocpp.org/)
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?style=for-the-badge&logo=c%2B%2B&logoColor=white)](https://isocpp.org/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows%2011-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://www.microsoft.com/windows/)
 [![Build](https://img.shields.io/badge/Build-CMake%20%7C%20MSVC-064F8C?style=for-the-badge&logo=cmake&logoColor=white)](https://cmake.org/)
 [![License](https://img.shields.io/badge/License-GPLv3-blue?style=for-the-badge&logo=gnu&logoColor=white)](https://www.gnu.org/licenses/gpl-3.0)
@@ -180,13 +180,20 @@ Measured on Windows 11 23H2 (Ryzen 7 / i7, 16GB RAM):
 - Windows SDK ≥ 10.0.22000  
 - CMake ≥ 3.21  
 
-### Build
+### Build (CMake/MSVC)
 
-
+```
 cd C:\Path\To\Aegis11
 cmake -B build -S .
 cmake --build build --config Release
+```
 
+The supported and reproducible toolchain is Visual Studio 2022 (MSVC v143),
+Windows SDK >= 10.0.22000, and CMake >= 3.21. The same configure/build path is
+enforced by `.github/workflows/windows-build.yml`; MinGW/GCC is not a supported
+build path. The CI job proves compilation and repository checks only. It does
+not enable enforcement modes, modify system state, install certificates, or
+claim successful Windows runtime behavior.
 
 ---
 
