@@ -52,6 +52,29 @@ namespace Aegis::Core {
             }
         }
 
+        static std::string EscapeJsonString(const std::string& value) {
+            std::ostringstream escaped;
+            escaped << std::hex << std::setfill('0');
+            for (unsigned char ch : value) {
+                switch (ch) {
+                    case '"': escaped << "\\\""; break;
+                    case '\\': escaped << "\\\\"; break;
+                    case '\b': escaped << "\\b"; break;
+                    case '\f': escaped << "\\f"; break;
+                    case '\n': escaped << "\\n"; break;
+                    case '\r': escaped << "\\r"; break;
+                    case '\t': escaped << "\\t"; break;
+                    default:
+                        if (ch < 0x20) {
+                            escaped << "\\u" << std::setw(4) << static_cast<unsigned int>(ch);
+                        } else {
+                            escaped << static_cast<char>(ch);
+                        }
+                }
+            }
+            return escaped.str();
+        }
+
         void RotateLogIfNeeded() {
             std::error_code ec;
             if (std::filesystem::exists(currentLogPath, ec) && std::filesystem::file_size(currentLogPath, ec) > MAX_LOG_SIZE) {
@@ -94,10 +117,10 @@ namespace Aegis::Core {
             RotateLogIfNeeded();
 
             // Persistent JSON payload enriched with telemetry metadata
-            std::string payload = "{\"ts\":\"" + GetTimestamp() + "\",\"sid\":\"" + sessionId + 
-                                 "\",\"trace\":\"" + currentTraceId + "\",\"lvl\":\"" + LevelToStr(level) + 
-                                 "\",\"cat\":\"" + category + "\",\"evt\":" + std::to_string(eventId) + 
-                                 ",\"lat\":" + std::to_string(latencyMs) + ",\"msg\":\"" + message + "\"}";
+            std::string payload = "{\"ts\":\"" + EscapeJsonString(GetTimestamp()) + "\",\"sid\":\"" + EscapeJsonString(sessionId) +
+                                 "\",\"trace\":\"" + EscapeJsonString(currentTraceId) + "\",\"lvl\":\"" + EscapeJsonString(LevelToStr(level)) +
+                                 "\",\"cat\":\"" + EscapeJsonString(category) + "\",\"evt\":" + std::to_string(eventId) +
+                                 ",\"lat\":" + std::to_string(latencyMs) + ",\"msg\":\"" + EscapeJsonString(message) + "\"}";
 
             std::ofstream file(currentLogPath, std::ios::app);
             if (file.is_open()) {

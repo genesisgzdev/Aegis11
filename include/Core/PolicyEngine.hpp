@@ -12,6 +12,11 @@
 #include <fstream>
 #include <mutex>
 #include <map>
+#include <algorithm>
+#include <limits>
+#include <exception>
+#include <cstring>
+#include <malloc.h>
 
 #define AEGIS_ENGINE_VERSION "1.0.0"
 #define WAL_SECTOR_SIZE 4096
@@ -92,14 +97,16 @@ namespace Aegis::Core {
             return std::wstring(buffer);
         }
 
-        void AtomicAppendJournal(const TransactionRecord& tx) {
+        bool AtomicAppendJournal(const TransactionRecord& tx) {
             std::lock_guard<std::mutex> lock(walMutex);
             std::string payload = tx.to_json().dump();
             uint64_t crc = Utils::FNV1a64(payload);
             std::wstring wPath = Utils::s2ws(journalPath);
             // NO_BUFFERING/WRITE_THROUGH flags to bypass OS cache and prevent torn writes during power loss
             HANDLE hFile = CreateFileW(wPath.c_str(), FILE_APPEND_DATA, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
-            if (hFile != INVALID_HANDLE_VALUE) {
+            if (hFile == INVALID_HANDLE_VALUE) return false;
+            bool ok = false;
+            {
                 // Anti-Torn-Write Structure: [Size][Payload][CRC64][COMMIT_MARKER: 0xAA][\n]
                 std::string header = std::to_string(payload.size()) + "|";
                 std::string footer = "|" + std::to_string(crc) + "|\xAA\n";
@@ -107,18 +114,23 @@ namespace Aegis::Core {
                 
                 // Hardware-level alignment: 4KB logical sector padding to prevent torn writes
                 size_t padded_size = (line.size() + (WAL_SECTOR_SIZE - 1)) & ~(WAL_SECTOR_SIZE - 1);
+                if (padded_size > std::numeric_limits<DWORD>::max()) {
+                    CloseHandle(hFile);
+                    return false;
+                }
                 void* aligned_buffer = _aligned_malloc(padded_size, WAL_SECTOR_SIZE);
                 if (aligned_buffer) {
                     memset(aligned_buffer, ' ', padded_size); // Fill with neutral spaces
                     memcpy(aligned_buffer, line.data(), line.size()); // Insert valid payload
                     
                     DWORD written;
-                    WriteFile(hFile, aligned_buffer, (DWORD)padded_size, &written, NULL);
+                    ok = WriteFile(hFile, aligned_buffer, (DWORD)padded_size, &written, NULL) && written == padded_size;
                     _aligned_free(aligned_buffer);
                 }
-                FlushFileBuffers(hFile);
-                CloseHandle(hFile);
+                ok = ok && FlushFileBuffers(hFile);
             }
+            ok = CloseHandle(hFile) && ok;
+            return ok;
         }
 
     public:
@@ -129,6 +141,7 @@ namespace Aegis::Core {
             std::ifstream file(std::filesystem::path(journalPath), std::ios::binary);
             std::string line; journal.clear();
             while (std::getline(file, line)) {
+                line.erase(0, line.find_first_not_of(' '));
                 if (line.empty() || line.back() != '\xAA') continue; // Torn Write detected! Missing trailing Commit Marker.
                 line.pop_back(); // Remove \xAA
                 
@@ -137,10 +150,14 @@ namespace Aegis::Core {
                 if (firstPipe != std::string::npos && lastPipe != std::string::npos && firstPipe != lastPipe) {
                     std::string payload = line.substr(firstPipe + 1, lastPipe - firstPipe - 1);
                     std::string crcStr = line.substr(lastPipe + 1);
-                    if (Utils::FNV1a64(payload) == std::stoull(crcStr)) {
-                        auto tx = TransactionRecord::from_json(json::parse(payload));
-                        journal.push_back(tx);
-                        if (tx.sequence_number > current_sequence) current_sequence = tx.sequence_number;
+                    try {
+                        if (std::stoull(crcStr) == Utils::FNV1a64(payload)) {
+                            auto tx = TransactionRecord::from_json(json::parse(payload));
+                            journal.push_back(tx);
+                            if (tx.sequence_number > current_sequence) current_sequence = tx.sequence_number;
+                        }
+                    } catch (const std::exception&) {
+                        log.Log(LogLevel::WARN, "WAL", 302, "Ignoring malformed journal record during recovery.");
                     }
                 }
             }
@@ -214,15 +231,21 @@ namespace Aegis::Core {
             }
 
             journal.push_back(tx);
-            AtomicAppendJournal(tx);
+            if (!AtomicAppendJournal(tx)) {
+                log.Log(LogLevel::ERR, "WAL", 303, "Unable to durably append pending transaction; policy was not applied.");
+                journal.pop_back();
+                return false;
+            }
 
             if (RegCreateKeyExW(def.rootHive, def.path.c_str(), 0, nullptr, 0, KEY_WRITE | KEY_WOW64_64KEY, nullptr, &hKey, nullptr) == ERROR_SUCCESS) {
                 DWORD winType = (def.type == RegType::SZ) ? REG_SZ : REG_DWORD;
                 if (RegSetValueExW(hKey, def.key.c_str(), 0, winType, def.targetData.data(), (DWORD)def.targetData.size()) == ERROR_SUCCESS) {
                     RegCloseKey(hKey);
                     journal.back().state = TxState::COMMITTED;
-                    AtomicAppendJournal(journal.back());
-                    return true;
+                    if (AtomicAppendJournal(journal.back())) return true;
+                    log.Log(LogLevel::FATAL, "WAL", 304, "Unable to durably append committed transaction; reverting policy.");
+                    RollbackRecord(journal.back());
+                    return false;
                 }
                 RegCloseKey(hKey);
             }

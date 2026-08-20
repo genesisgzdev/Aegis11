@@ -44,10 +44,15 @@ namespace Aegis::Modules {
     class NetworkWfp {
         Core::Logger& log;
 
-        void CleanupOrphanedRules(HANDLE engine) {
-            if (FwpmProviderDeleteByKey0(engine, &AEGIS_PROVIDER_GUID) == ERROR_SUCCESS) {
+        bool CleanupOrphanedRules(HANDLE engine) {
+            DWORD status = FwpmProviderDeleteByKey0(engine, &AEGIS_PROVIDER_GUID);
+            if (status == ERROR_SUCCESS) {
                 log.Log(Core::LogLevel::INFO, "WFP", 200, "Cleaned up orphaned Aegis WFP rules based on Version-tagged Provider.");
+                return true;
             }
+            if (status == FWP_E_PROVIDER_NOT_FOUND) return true;
+            log.Log(Core::LogLevel::ERR, "WFP", 503, "Failed to clean up existing WFP provider: " + std::to_string(status));
+            return false;
         }
 
         bool HealthCheckConnectivity() {
@@ -100,22 +105,36 @@ namespace Aegis::Modules {
             if (!h) { log.Log(Core::LogLevel::FATAL, "WFP", 500, "WFP Engine failed to open after retries."); return; }
             Core::KernelHandle engine = Core::KernelHandle::From(h);
 
-            CleanupOrphanedRules(engine.get());
+            if (!CleanupOrphanedRules(engine.get())) return;
 
-            if (FwpmTransactionBegin0(engine.get(), 0) != ERROR_SUCCESS) return;
+            DWORD status = FwpmTransactionBegin0(engine.get(), 0);
+            if (status != ERROR_SUCCESS) {
+                log.Log(Core::LogLevel::ERR, "WFP", 504, "Failed to begin WFP transaction: " + std::to_string(status));
+                return;
+            }
 
             FWPM_PROVIDER0 provider = {0};
             provider.providerKey = AEGIS_PROVIDER_GUID;
             std::wstring pName = std::wstring(L"Aegis11 Mitigation Engine ") + AEGIS_WFP_VERSION;
             provider.displayData.name = (wchar_t*)pName.c_str();
-            FwpmProviderAdd0(engine.get(), &provider, NULL);
+            status = FwpmProviderAdd0(engine.get(), &provider, NULL);
+            if (status != ERROR_SUCCESS) {
+                FwpmTransactionAbort0(engine.get());
+                log.Log(Core::LogLevel::ERR, "WFP", 505, "Failed to add WFP provider: " + std::to_string(status));
+                return;
+            }
 
             FWPM_SUBLAYER0 sub = {0};
             sub.subLayerKey = AEGIS_SUBLAYER_GUID;
             sub.providerKey = (GUID*)&AEGIS_PROVIDER_GUID;
             sub.displayData.name = (wchar_t*)L"Aegis11 Immutable Sublayer";
             sub.weight = 0x00FF; 
-            FwpmSubLayerAdd0(engine.get(), &sub, NULL);
+            status = FwpmSubLayerAdd0(engine.get(), &sub, NULL);
+            if (status != ERROR_SUCCESS) {
+                FwpmTransactionAbort0(engine.get());
+                log.Log(Core::LogLevel::ERR, "WFP", 506, "Failed to add WFP sublayer: " + std::to_string(status));
+                return;
+            }
 
             // Rate Limiting and Flood Protection: Utilizing CIDR subnets rather than individual IP rules
             struct { UINT32 ip; UINT32 mask; } rangesV4[] = { { 0x14B80000, 0xFFF80000 }, { 0x34910000, 0xFFFF0000 } };
@@ -147,7 +166,12 @@ namespace Aegis::Modules {
                     c[1].conditionValue.uint8 = IPPROTO_TCP;
 
                     f.filterCondition = c; f.numFilterConditions = 2;
-                    FwpmFilterAdd0(engine.get(), &f, NULL, NULL);
+                    status = FwpmFilterAdd0(engine.get(), &f, NULL, NULL);
+                    if (status != ERROR_SUCCESS) {
+                        FwpmTransactionAbort0(engine.get());
+                        log.Log(Core::LogLevel::ERR, "WFP", 507, "Failed to add WFP filter: " + std::to_string(status));
+                        return;
+                    }
                 }
             }
 
