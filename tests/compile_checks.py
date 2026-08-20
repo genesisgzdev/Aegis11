@@ -11,7 +11,7 @@ def require(path: str, text: str) -> None:
 
 
 require("CMakeLists.txt", 'project(Aegis11 VERSION 1.0.0 LANGUAGES CXX RC)')
-require("CMakeLists.txt", 'add_executable(aegis11 WIN32')
+require("CMakeLists.txt", 'add_executable(aegis11\n')
 require("include/Core/Logger.hpp", 'EscapeJsonString')
 require("include/Modules/NetworkWfp.hpp", 'FwpmFilterAdd0')
 require("include/Core/PolicyEngine.hpp", 'written == padded_size')
