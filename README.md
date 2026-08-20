@@ -6,9 +6,8 @@
 [![Windows 11](https://img.shields.io/badge/Platform-Windows%2011-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://www.microsoft.com/windows/)
 [![Build](https://img.shields.io/badge/Build-CMake%20%7C%20MSVC-064F8C?style=for-the-badge&logo=cmake&logoColor=white)](https://cmake.org/)
 [![License](https://img.shields.io/badge/License-GPLv3-blue?style=for-the-badge&logo=gnu&logoColor=white)](https://www.gnu.org/licenses/gpl-3.0)
-![Release](https://img.shields.io/github/v/release/yourusername/Aegis11?style=for-the-badge)
-![Issues](https://img.shields.io/github/issues/yourusername/Aegis11?style=for-the-badge)
-![Build Status](https://img.shields.io/github/actions/workflow/status/yourusername/Aegis11/build.yml?style=for-the-badge)
+![Release](https://img.shields.io/github/v/release/genesisgzdev/Aegis11?style=for-the-badge)
+![Issues](https://img.shields.io/github/issues/genesisgzdev/Aegis11?style=for-the-badge)
 
 Aegis11 is a deterministic state enforcement engine for Windows systems.
 
