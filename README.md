@@ -1,240 +1,62 @@
-# Aegis11 System Controller & Mitigation Engine
+# Aegis11
 
-## Overview
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?style=flat-square&logo=c%2B%2B&logoColor=white)](https://isocpp.org/)
+[![Windows](https://img.shields.io/badge/platform-Windows-0078D4?style=flat-square&logo=windows&logoColor=white)](https://www.microsoft.com/windows/)
+[![CMake](https://img.shields.io/badge/build-CMake%20%2B%20MSVC-064F8C?style=flat-square&logo=cmake&logoColor=white)](https://cmake.org/)
+[![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square)](LICENSE)
 
-[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?style=for-the-badge&logo=c%2B%2B&logoColor=white)](https://isocpp.org/)
-[![Windows 11](https://img.shields.io/badge/Platform-Windows%2011-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://www.microsoft.com/windows/)
-[![Build](https://img.shields.io/badge/Build-CMake%20%7C%20MSVC-064F8C?style=for-the-badge&logo=cmake&logoColor=white)](https://cmake.org/)
-[![License](https://img.shields.io/badge/License-GPLv3-blue?style=for-the-badge&logo=gnu&logoColor=white)](https://www.gnu.org/licenses/gpl-3.0)
-![Release](https://img.shields.io/github/v/release/genesisgzdev/Aegis11?style=for-the-badge)
-![Issues](https://img.shields.io/github/issues/genesisgzdev/Aegis11?style=for-the-badge)
+Aegis11 es un controlador de políticas para Windows. Su objetivo es aplicar una configuración deseada, registrar los cambios y volver a comprobar el estado cuando el sistema se desvía de esa configuración.
 
-Aegis11 is a deterministic state enforcement engine for Windows systems.
+El proyecto trabaja sobre componentes sensibles de Windows como registro, servicios, tareas programadas y Windows Filtering Platform. Por eso el README separa lo que compila de lo que todavía necesita pruebas nativas en una máquina Windows aislada.
 
-It applies, validates, and continuously reconciles a desired system configuration across multiple OS subsystems, including the registry, services, scheduled tasks, and network filtering layers.
+## Estado actual
 
-Rather than relying on one-time modifications, it implements a transactional Write-Ahead Log (WAL) and a drift reconciliation model, ensuring consistency across reboots, updates, and external interference.
+- La ruta reproducible de compilación usa Visual Studio 2022, MSVC v143, Windows SDK 10.0.22000 o superior y CMake 3.21 o superior.
+- GitHub Actions comprueba la compilación de Windows y los checks del repositorio.
+- `--reconcile`, `--simulate` y `--apply` están expuestos por la CLI.
+- La ejecución con privilegios, los cambios de red y la reconciliación sobre un sistema real necesitan validación específica en Windows.
+- La interfaz de snapshot y restore todavía no está implementada. El binario rechaza esas opciones para no informar un éxito falso.
 
----
+Esto no es un antivirus ni un EDR terminado. Es una base de ingeniería para control de estado y mitigación en Windows.
 
-## Design Philosophy
+## Cómo está organizado
 
-The engine does not attempt to break or remove core system components.
+- `PolicyEngine` y el WAL coordinan transacciones y recuperación
+- `Registry`, `Service` y `Task` inspeccionan y aplican políticas del sistema
+- `NetworkWfp` y `FirewallManager` encapsulan las capas de filtrado
+- `AppxManager` y `DataPurge` cubren operaciones de paquetes y limpieza
+- `Reinforcement` registra la tarea de reconciliación
+- `InteractiveShell` y `ArgumentParser` forman la interfaz de consola
 
-Instead, it enforces control through:
+El WAL usa entradas JSONL con estados de transacción y validación de integridad. Las garantías concretas dependen de la implementación del módulo y deben probarse con el sistema que se vaya a modificar.
 
-- **Deterministic state application** (no blind writes)  
-- **Continuous drift detection and reconciliation**  
-- **Transactional safety with full rollback capability**  
+## Uso
 
-Windows is treated as a mutable system where state must be continuously enforced, not assumed.
-
----
-
-## Core Architecture
-
-### 1. Core Engine
-
-- Write-Ahead Log (WAL) with append-only JSONL entries  
-- Deterministic transaction replay and rollback  
-- Drift-aware state reconciliation engine  
-- Cross-module execution coordination  
-
----
-
-### 2. State Providers
-
-#### Registry Engine
-
-- Multi-hive support (HKLM, HKCU, HKU, offline hives)  
-- Byte-level idempotence with strict type validation  
-- REG_EXPAND_SZ normalization and environment expansion  
-- Optional ACL snapshot and restoration  
-
-#### Service Manager
-
-- Dependency graph resolution (`EnumDependentServicesW`)  
-- Circular dependency protection  
-- Adaptive shutdown with real-time status polling  
-- Recovery policy neutralization (`SERVICE_FAILURE_ACTIONS`)  
-- Trigger-based service awareness  
-
-#### Task Scheduler Engine
-
-- Full COM inspection of task definitions  
-- Extraction of execution targets (`IExecAction`)  
-- Authenticode validation via `WinVerifyTrust`  
-- Canonical path and argument verification  
-
-#### Network Filtering (WFP)
-
-- Native interaction with Windows Filtering Platform  
-- Custom provider and sublayer isolation  
-- Filtering layers:
-  - ALE_AUTH_CONNECT (new connections)  
-  - ALE_FLOW_ESTABLISHED (existing flows)  
-- IPv4 / IPv6 dual-stack support  
-- CIDR-based rule aggregation  
-- Selective cleanup via provider GUID  
-
----
-
-### 3. Application & Package Management
-
-- Native WinRT-based Appx removal (`Windows.Management.Deployment`)  
-- No reliance on PowerShell or external scripts  
-- Post-removal validation via re-query  
-
----
-
-### 4. Persistence & Reconciliation
-
-- Scheduled execution via `--reconcile`  
-- Drift detection against live system state  
-- Automatic re-application of desired configuration  
-- Jittered execution to avoid startup contention  
-
----
-
-## Write-Ahead Log (WAL)
-
-The WAL guarantees transactional integrity:
-
-- Append-only JSONL format with entry framing  
-- Per-entry integrity validation (hash/checksum)  
-- 4KB-aligned writes to prevent torn writes  
-- Explicit disk flush via `FlushFileBuffers`  
-
-### Transaction States
-
-- PENDING  
-- COMMITTED  
-- ROLLED_BACK  
-- FAILED  
-- RECOVERY_APPLIED  
-
----
-
-## Recovery Model
-
-On startup:
-
-- Invalid or truncated entries are discarded  
-- Pending transactions are rolled back  
-- System state is deterministically reconstructed  
-
----
-
-## Execution Modes
-
-### Interactive Mode
-
-
-Aegis11.exe
-
-
-Profiles:
-
-- **[1] Light** → minimal, non-intrusive enforcement  
-- **[2] Balanced** → registry + services + task mitigation  
-- **[3] Aggressive** → full enforcement (Appx + WFP)  
-- **[R] Rollback** → full state restoration via WAL  
-
----
-
-### Reconciliation Mode
-
-
-Aegis11.exe --reconcile
-
-
-- Fully non-interactive  
-- Designed for scheduled execution  
-- Applies drift correction only  
-
----
-
-## Performance Characteristics
-
-Measured on Windows 11 23H2 (Ryzen 7 / i7, 16GB RAM):
-
-| Operation            | API Layer        | Memory | Time   |
-|---------------------|------------------|--------|--------|
-| Appx Removal        | WinRT / COM      | ~12MB  | ~850ms |
-| WFP Injection       | fwpuclnt.dll     | ~4MB   | ~120ms |
-| Task Validation     | taskschd.dll     | ~18MB  | ~1.8s  |
-| Service Mitigation  | advapi32.dll     | <2MB   | ~45ms  |
-| WAL Initialization  | NTFS (aligned)   | 4KB    | ~12ms  |
-
-- CPU usage: <5% peak  
-- Disk I/O: bounded and aligned  
-
----
-
-## Build & Installation
-
-### Requirements
-
-- Windows 10/11 (22H2+)  
-- MSVC v143  
-- Windows SDK ≥ 10.0.22000  
-- CMake ≥ 3.21  
-
-### Build (CMake/MSVC)
-
+```powershell
+.\aegis11.exe --help
+.\aegis11.exe --simulate
+.\aegis11.exe --apply
+.\aegis11.exe --reconcile
 ```
-cd C:\Path\To\Aegis11
+
+`--simulate` calcula la ruta de aplicación sin pedir una escritura efectiva. `--apply` ejecuta la política y `--reconcile` está pensado para una ejecución programada. Prueba primero en una instalación descartable y conserva una forma externa de recuperar el sistema.
+
+## Compilar en Windows
+
+```powershell
 cmake -B build -S .
 cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
 ```
 
-The supported and reproducible toolchain is Visual Studio 2022 (MSVC v143),
-Windows SDK >= 10.0.22000, and CMake >= 3.21. The same configure/build path is
-enforced by `.github/workflows/windows-build.yml`; MinGW/GCC is not a supported
-build path. The CI job proves compilation and repository checks only. It does
-not enable enforcement modes, modify system state, install certificates, or
-claim successful Windows runtime behavior.
+El proyecto es Windows-only. El job de CI demuestra que el código compila y que pasan los checks estáticos del repositorio; no prueba que una política privilegiada sea segura para cualquier máquina.
 
----
+## Seguridad y límites
 
-## Security Considerations
+Aegis11 puede afectar conectividad, servicios, tareas y políticas del registro. No lo ejecutes sobre equipos ajenos ni en producción sin una política revisada, una copia recuperable y una prueba de aceptación para cada módulo.
 
-This tool operates with elevated privileges and modifies critical OS subsystems.
+No se deben interpretar los nombres de los módulos como evidencia de una capacidad ya validada en runtime. La aceptación real requiere observar el cambio en Windows y comprobar también el camino de reversión.
 
-Potential risks:
+## Licencia
 
-- Network disruption (WFP misconfiguration)  
-- Service dependency instability  
-- Windows Update conflicts  
-- Application compatibility issues  
-
-Intended for:
-
-- advanced users  
-- system engineers  
-- security researchers  
-
----
-
-## What This Is Not
-
-- Not an antivirus  
-- Not an EDR  
-- Not guaranteed to override Windows internals permanently  
-- Not safe for unattended use without validation  
-
----
-
-## Disclaimer
-
-Provided **“as is”**, without warranty of any kind.
-
-Modifying system services, registry policies, and network layers may significantly alter system behavior.  
-No responsibility is assumed for instability, data loss, or connectivity issues.
-
----
-
-## Author
-
-**Genesis**  
-Security Researcher & Lead Developer
+GPL-3.0. Consulta [LICENSE](LICENSE).
