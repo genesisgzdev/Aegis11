@@ -20,6 +20,7 @@ target_compile_definitions(aegis11 PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN 
 
 if(MSVC)
     target_compile_options(aegis11 PRIVATE /W4 /permissive-)
+    target_link_options(aegis11 PRIVATE /MANIFEST:NO)
 else()
     target_compile_options(aegis11 PRIVATE -Wall -Wextra -Wpedantic)
 endif()
