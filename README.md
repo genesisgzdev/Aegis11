@@ -14,6 +14,9 @@ El proyecto trabaja sobre componentes sensibles de Windows como registro, servic
 - La ruta reproducible de compilación usa Visual Studio 2022, MSVC v143, Windows SDK 10.0.22000 o superior y CMake 3.21 o superior.
 - GitHub Actions comprueba la compilación de Windows y los checks del repositorio.
 - `--reconcile`, `--simulate` y `--apply` están expuestos por la CLI.
+- `--apply` ejecuta la lista fija de servicios de `ServiceManager`; no equivale al perfil interactivo Aggressive.
+- `--reconcile` recupera el WAL y vuelve a aplicar las comprobaciones de servicios y tareas que hoy implementa el código.
+- `--simulate` solo muestra el plan de servicios y no simula todos los módulos interactivos.
 - La ejecución con privilegios, los cambios de red y la reconciliación sobre un sistema real necesitan validación específica en Windows.
 - La interfaz de snapshot y restore todavía no está implementada. El binario rechaza esas opciones para no informar un éxito falso.
 
@@ -39,7 +42,7 @@ El WAL usa entradas JSONL con estados de transacción y validación de integrida
 .\aegis11.exe --reconcile
 ```
 
-`--simulate` calcula la ruta de aplicación sin pedir una escritura efectiva. `--apply` ejecuta la política y `--reconcile` está pensado para una ejecución programada. Prueba primero en una instalación descartable y conserva una forma externa de recuperar el sistema.
+`--simulate` escribe en el log los servicios que se detendrían y deshabilitarían. `--apply` aplica esa misma lista. `--reconcile` recupera el WAL y ejecuta la ruta de servicios y tareas para la que existe código. El modo sin argumentos abre el perfil interactivo completo. Prueba primero en una instalación descartable y conserva una forma externa de recuperar el sistema.
 
 ## Compilar en Windows
 
@@ -56,6 +59,8 @@ El proyecto es Windows-only. El job de CI demuestra que el código compila y que
 Aegis11 puede afectar conectividad, servicios, tareas y políticas del registro. No lo ejecutes sobre equipos ajenos ni en producción sin una política revisada, una copia recuperable y una prueba de aceptación para cada módulo.
 
 No se deben interpretar los nombres de los módulos como evidencia de una capacidad ya validada en runtime. La aceptación real requiere observar el cambio en Windows y comprobar también el camino de reversión.
+
+El flujo exacto por modo está en [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Licencia
 

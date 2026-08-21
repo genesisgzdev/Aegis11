@@ -50,9 +50,14 @@ namespace Aegis::Modules {
         }
 
         void EnforcePolicy(bool dryRun) {
-            if (dryRun) return;
             std::vector<std::wstring> targets = { L"DiagTrack", L"dmwappushservice", L"WerSvc", L"PcaSvc", L"edgeupdate", L"edgeupdatem" };
-            for (const auto& s : targets) NeutralizeService(s);
+            for (const auto& s : targets) {
+                if (dryRun) {
+                    log.Log(Core::LogLevel::INFO, "SVC", 150, "Dry-run: would stop and disable service: " + Core::Utils::ws2s(s));
+                } else {
+                    NeutralizeService(s);
+                }
+            }
         }
     };
 }
