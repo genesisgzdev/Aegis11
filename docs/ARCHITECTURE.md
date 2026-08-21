@@ -1,26 +1,73 @@
 # Aegis11 architecture
 
+Aegis11 tiene una ruta interactiva amplia y tres rutas CLI deliberadamente más estrechas. Documentarlas como si todas ejecutaran el mismo perfil sería incorrecto.
+
+## 1. Enrutamiento por modo
+
 ~~~mermaid
 flowchart TD
-    Main[main.cpp] --> Parse[ArgumentParser]
-    Parse -->|no args or interactive| UI[InteractiveShell]
-    Parse -->|simulate| Sim[ServiceManager dry-run]
-    Parse -->|apply| Apply[ServiceManager apply]
-    Parse -->|reconcile| Rec[WAL recovery plus ServiceManager plus TaskManager]
-    UI --> Policy[PolicyEngine registry WAL]
-    UI --> Modules[Task Appx WFP firewall purge network modules]
-    UI --> Reinforce[Reinforcement scheduled task]
-    Policy --> Registry[Windows registry]
-    Modules --> Windows[services tasks WFP firewall Appx system state]
-    Reinforce -->|Windows servicing events| Main
+    MAIN[main.cpp] --> P[ArgumentParser]
+    P -->|invalid/help| EXIT[exit 2 or 0]
+    P -->|--simulate| DRY[ServiceManager dry-run]
+    P -->|--apply| APPLY[ServiceManager fixed service list]
+    P -->|--reconcile| REC[PolicyEngine LoadAndRecover]
+    REC --> S[ServiceManager apply]
+    REC --> T[TaskManager disable two known tasks]
+    P -->|no args or --interactive| UI[InteractiveShell]
+    UI --> L[Light: PolicyEngine registry writes]
+    UI --> B[Balanced: registry + services + tasks + Appx Edge/OneDrive]
+    UI --> A[Aggressive: WFP + firewall + Appx + purge + network optimizer]
+    UI --> W[Reinforcement servicing-event scheduled task]
 ~~~
 
-## Code-aligned behavior
+`--snapshot` y `--restore` son opciones parser-only: `main.cpp` las rechaza con exit code 3. No hay un archivo de snapshot que conecte el CLI con `RegistryManager`.
 
-- --apply is not the interactive profile. It calls ServiceManager::EnforcePolicy(false) for the fixed service list in that class.
-- --simulate produces dry-run log entries for that same service list and does not write service state.
-- --reconcile recovers the WAL, applies the service list and disables the two task paths implemented by TaskManager; it does not run every interactive module.
-- No-argument interactive mode is the only path that exposes the Light, Balanced and Aggressive profiles and registers the servicing-event task.
-- --snapshot and --restore are parser placeholders. main.cpp exits with code 3 rather than pretending those operations succeeded.
+## 2. Transacción de política de registro
 
-The CMake test invokes tests/compile_checks.py; Windows compilation is performed by CI. Neither proves that privileged registry, service, task or WFP changes are safe on an arbitrary host.
+~~~mermaid
+sequenceDiagram
+    participant UI as InteractiveShell
+    participant PE as PolicyEngine
+    participant WAL as aegis_wal.jsonl
+    participant REG as Windows Registry
+    UI->>PE: ApplyPolicy definition
+    PE->>REG: read current key/value
+    alt target already equal
+      PE-->>UI: true without new transaction
+    else drift or missing
+      PE->>WAL: append PENDING + FNV integrity + commit marker
+      PE->>REG: RegCreateKeyEx + RegSetValueEx
+      alt write succeeds
+        PE->>WAL: append COMMITTED + FlushFileBuffers
+        PE-->>UI: true
+      else write or durable commit fails
+        PE->>REG: RollbackRecord
+        PE-->>UI: false
+      end
+    end
+~~~
+
+El WAL usa entradas alineadas a 4096 bytes, FNV-1a sobre el payload, marcador final `0xAA` y `FlushFileBuffers`. Eso describe integridad de escritura; no equivale a snapshot completo ni rollback de todos los módulos.
+
+## 3. Recuperación y persistencia
+
+~~~mermaid
+stateDiagram-v2
+    [*] --> PENDING: append before registry write
+    PENDING --> COMMITTED: registry write + durable WAL append
+    PENDING --> RECOVERY_APPLIED: startup rollback
+    PARTIAL_APPLY --> RECOVERY_APPLIED: startup rollback
+    COMMITTED --> ROLLED_BACK: interactive R
+    FAILED --> [*]
+    RECOVERY_APPLIED --> [*]
+~~~
+
+- Constructor de `PolicyEngine` llama `LoadAndRecover`; `--reconcile` lo vuelve a llamar antes de ejecutar servicios y tareas.
+- Interactive `R` revierte solo registros marcados `COMMITTED` y elimina `aegis_wal.jsonl`.
+- `Reinforcement` se registra solo desde la ruta interactiva y dispara por eventos de servicing de Windows con argumento `--reconcile`.
+
+## 4. Límite de validación
+
+- `tests/compile_checks.py` valida contratos de repo/CMake; Windows CI valida compilación.
+- No se ha demostrado aquí la ejecución privilegiada sobre registro, servicios, tareas, WFP, firewall o Appx.
+- Cualquier prueba de `--apply`, perfil Aggressive o tarea de auto-reconciliación debe ejecutarse en VM/equipo Windows descartable con recuperación externa.
