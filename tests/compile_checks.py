@@ -9,8 +9,7 @@ def require(path: str, text: str) -> None:
     if text not in content:
         raise AssertionError(f"{path} does not contain required marker: {text}")
 
-
-require("CMakeLists.txt", 'project(Aegis11 VERSION 1.0.0 LANGUAGES CXX RC)')
+require("CMakeLists.txt", 'project(Aegis11 VERSION 0.1.1 LANGUAGES CXX RC)')
 require("CMakeLists.txt", 'add_executable(aegis11\n')
 require("include/Core/Logger.hpp", 'EscapeJsonString')
 require("include/Modules/NetworkWfp.hpp", 'FwpmFilterAdd0')

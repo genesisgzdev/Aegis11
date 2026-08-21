@@ -7,6 +7,8 @@
 
 Aegis11 es un controlador de políticas para Windows. Su objetivo es aplicar una configuración deseada, registrar los cambios y volver a comprobar el estado cuando el sistema se desvía de esa configuración.
 
+En 30 segundos: `--simulate` muestra el plan de servicios, `--apply` aplica esa ruta fija y `--reconcile` recupera el WAL y vuelve a comprobar servicios y tareas. Sin argumentos abre el modo interactivo, que expone más módulos. Es una base de control de estado, no un antivirus ni un EDR certificado.
+
 El proyecto trabaja sobre componentes sensibles de Windows como registro, servicios, tareas programadas y Windows Filtering Platform. Por eso el README separa lo que compila de lo que todavía necesita pruebas nativas en una máquina Windows aislada.
 
 ## Estado actual
@@ -22,7 +24,7 @@ El proyecto trabaja sobre componentes sensibles de Windows como registro, servic
 
 Esto no es un antivirus ni un EDR terminado. Es una base de ingeniería para control de estado y mitigación en Windows.
 
-## Cómo está organizado
+## Flujo y límites
 
 - `PolicyEngine` y el WAL coordinan transacciones y recuperación
 - `Registry`, `Service` y `Task` inspeccionan y aplican políticas del sistema
@@ -30,6 +32,23 @@ Esto no es un antivirus ni un EDR terminado. Es una base de ingeniería para con
 - `AppxManager` y `DataPurge` cubren operaciones de paquetes y limpieza
 - `Reinforcement` registra la tarea de reconciliación
 - `InteractiveShell` y `ArgumentParser` forman la interfaz de consola
+
+```mermaid
+flowchart LR
+    A[CLI] --> B{modo}
+    B -->|simulate| C[plan de servicios sin aplicar]
+    B -->|apply| D[ServiceManager]
+    B -->|reconcile| E[WAL recovery]
+    E --> D
+    B -->|sin argumentos| F[InteractiveShell]
+    F --> G[Policy / Registry / Network / Tasks]
+    D --> H[estado Windows]
+    G --> H
+    D -. transacción .-> I[WAL JSONL]
+    G -. transacción .-> I
+```
+
+La vista separa las rutas que realmente existen. Los nombres de módulos no son evidencia de que cada capacidad esté validada en runtime.
 
 El WAL usa entradas JSONL con estados de transacción y validación de integridad. Las garantías concretas dependen de la implementación del módulo y deben probarse con el sistema que se vaya a modificar.
 
@@ -54,11 +73,13 @@ ctest --test-dir build -C Release --output-on-failure
 
 El proyecto es Windows-only. El job de CI demuestra que el código compila y que pasan los checks estáticos del repositorio; no prueba que una política privilegiada sea segura para cualquier máquina.
 
-## Seguridad y límites
+## Qué respalda cada nivel
 
 Aegis11 puede afectar conectividad, servicios, tareas y políticas del registro. No lo ejecutes sobre equipos ajenos ni en producción sin una política revisada, una copia recuperable y una prueba de aceptación para cada módulo.
 
-No se deben interpretar los nombres de los módulos como evidencia de una capacidad ya validada en runtime. La aceptación real requiere observar el cambio en Windows y comprobar también el camino de reversión.
+La compilación y `tests/compile_checks.py` cubren el código y el build. Las pruebas en VM Windows cubren cambios reales de registro, servicios, tareas, WFP, firewall o Appx. La recuperación necesita una prueba propia del cambio y de su reversión.
+
+Snapshot y restore aparecen como opciones reservadas y se rechazan; no se ocultan detrás de un ejemplo que parezca operativo.
 
 El flujo exacto por modo está en [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

@@ -2,6 +2,10 @@
 
 Aegis11 tiene una ruta interactiva amplia y tres rutas CLI deliberadamente más estrechas. Documentarlas como si todas ejecutaran el mismo perfil sería incorrecto.
 
+## Cómo leerlo
+
+La primera figura es un mapa de modos, no una promesa de que todos los módulos se ejecuten juntos. La secuencia explica la única transacción con WAL documentada aquí. El cierre separa compilación de comportamiento privilegiado observado en Windows.
+
 ## 1. Enrutamiento por modo
 
 ~~~mermaid
