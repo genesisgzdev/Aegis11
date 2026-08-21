@@ -57,7 +57,7 @@ namespace Aegis::Modules {
             pService->GetFolder(_bstr_t(L"\\"), pRoot.ReleaseAndGetAddressOf());
             pRoot->RegisterTaskDefinition(_bstr_t(L"Aegis11_SelfHealing"), pTask.get(), TASK_CREATE_OR_UPDATE, _variant_t(), _variant_t(), TASK_LOGON_INTERACTIVE_TOKEN, _variant_t(), NULL);
             
-            log.Log(Core::LogLevel::INFO, "DONE", 200, "Self-healing task registered at Logon.");
+            log.Log(Core::LogLevel::INFO, "DONE", 200, "Self-healing task registered for Windows servicing events.");
         }
     };
 }
