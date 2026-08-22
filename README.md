@@ -41,7 +41,7 @@ flowchart LR
     B -->|reconcile| E[WAL recovery]
     E --> D
     B -->|sin argumentos| F[InteractiveShell]
-    F --> G[Policy / Registry / Network / Tasks]
+    F --> G[Policy Registry Network and Tasks]
     D --> H[estado Windows]
     G --> H
     D -. transacción .-> I[WAL JSONL]
