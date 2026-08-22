@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Actualiza la acción de checkout del build Windows a la generación que ejecuta sobre Node 24.
+
 ## [0.1.2] - 2026-08-22
 
 ### Fixed
