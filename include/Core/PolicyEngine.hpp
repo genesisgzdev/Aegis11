@@ -241,7 +241,10 @@ namespace Aegis::Core {
 
             TransactionRecord tx;
             tx.sequence_number = ++current_sequence;
-            tx.id = std::to_string(GetTickCount64());
+            // Sequence numbers are already durable and monotonic. Using the
+            // clock alone can collide when two policies start in one tick,
+            // which would make recovery collapse unrelated transactions.
+            tx.id = "tx-" + std::to_string(tx.sequence_number);
             tx.name = Utils::ws2s(def.name);
             tx.rootHive = (uint64_t)def.rootHive;
             tx.path = Utils::ws2s(def.path);

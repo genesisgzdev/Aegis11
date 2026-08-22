@@ -20,6 +20,7 @@ require("include/Core/PolicyEngine.hpp", 'written == padded_size')
 require("include/Core/PolicyEngine.hpp", 'const size_t crcSeparator = payloadStart + payloadSize;')
 require("include/Core/PolicyEngine.hpp", 'tx.state = recovered ? TxState::RECOVERY_APPLIED : TxState::FAILED;')
 require("include/Core/PolicyEngine.hpp", 'latestById')
+require("include/Core/PolicyEngine.hpp", 'tx-" + std::to_string(tx.sequence_number)')
 require("include/Core/PolicyEngine.hpp", 'Unable to persist the failed commit recovery result.')
 require("include/Core/PolicyEngine.hpp", 'const LONG result = RegDeleteTreeW(root, path.c_str());')
 
