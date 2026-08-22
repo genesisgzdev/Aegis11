@@ -61,7 +61,7 @@ namespace Aegis::Modules {
             ControlService(hSvc.get(), SERVICE_CONTROL_STOP, &ss);
             ChangeServiceConfigW(hSvc.get(), SERVICE_NO_CHANGE, SERVICE_DISABLED, SERVICE_NO_CHANGE, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
             
-            log.Log(Core::LogLevel::INFO, "SVC", 200, "Neutralized service & disabled recovery: " + Core::Utils::ws2s(name));
+            log.Log(Core::LogLevel::INFO, "SVC", 200, "Neutralized service and preserved recovery configuration: " + Core::Utils::ws2s(name));
         }
 
         void EnforcePolicy(bool dryRun) {

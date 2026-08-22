@@ -13,61 +13,6 @@ namespace Aegis::Modules {
     class RegistryManager {
         Core::Logger& log;
 
-        // Real-time Kernel Token Privilege Escalation for Backup/Restore Operations
-        bool EnablePrivilege(LPCWSTR privName) {
-            HANDLE hToken;
-            if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken)) return false;
-            LUID luid;
-            if (!LookupPrivilegeValueW(NULL, privName, &luid)) { CloseHandle(hToken); return false; }
-            TOKEN_PRIVILEGES tp = {0};
-            tp.PrivilegeCount = 1; tp.Privileges[0].Luid = luid; tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-            bool res = AdjustTokenPrivileges(hToken, FALSE, &tp, sizeof(TOKEN_PRIVILEGES), NULL, NULL);
-            CloseHandle(hToken); return res;
-        }
-
-        // Offline Hive Mounting: Direct modification of physical NTUSER.DAT files
-        void ApplyToOfflineHives(const std::wstring& keyPath, const std::wstring& valName, DWORD val) {
-            if (!EnablePrivilege(SE_BACKUP_NAME) || !EnablePrivilege(SE_RESTORE_NAME)) {
-                log.Log(Core::LogLevel::ERR, "REG", 401, "Failed to acquire SE_RESTORE_NAME privilege. Skipping offline hives.");
-                return;
-            }
-
-            std::wstring profileList = L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList";
-            HKEY hKey;
-            if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, profileList.c_str(), 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
-                DWORD index = 0; wchar_t sid[256]; DWORD sidSize = 256;
-                while (RegEnumKeyExW(hKey, index++, sid, &sidSize, NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {
-                    std::wstring sidStr = sid;
-                    if (sidStr.find(L"S-1-5-21-") == 0) { // Standard User Profile SID
-                        HKEY hProfKey;
-                        std::wstring profPath = profileList + L"\\" + sidStr;
-                        if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, profPath.c_str(), 0, KEY_READ, &hProfKey) == ERROR_SUCCESS) {
-                            wchar_t imgPath[MAX_PATH]; DWORD imgSize = MAX_PATH * sizeof(wchar_t);
-                            if (RegQueryValueExW(hProfKey, L"ProfileImagePath", NULL, NULL, (LPBYTE)imgPath, &imgSize) == ERROR_SUCCESS) {
-                                std::wstring ntuserPath = std::wstring(imgPath) + L"\\NTUSER.DAT";
-                                std::wstring mountName = L"AegisOffline_" + sidStr;
-                                
-                                // Attempt to mount the physical registry hive. If the user is online, sharing violation occurs, which is intended behavior.
-                                if (RegLoadKeyW(HKEY_LOCAL_MACHINE, mountName.c_str(), ntuserPath.c_str()) == ERROR_SUCCESS) {
-                                    HKEY hSubKey;
-                                    std::wstring targetKey = mountName + L"\\" + keyPath;
-                                    if (RegCreateKeyExW(HKEY_LOCAL_MACHINE, targetKey.c_str(), 0, NULL, 0, KEY_WRITE, NULL, &hSubKey, NULL) == ERROR_SUCCESS) {
-                                        RegSetValueExW(hSubKey, valName.c_str(), 0, REG_DWORD, (const BYTE*)&val, sizeof(val));
-                                        RegCloseKey(hSubKey);
-                                        log.Log(Core::LogLevel::INFO, "REG", 201, "Offline Hive injected for: " + Core::Utils::ws2s(sidStr));
-                                    }
-                                    RegUnLoadKeyW(HKEY_LOCAL_MACHINE, mountName.c_str());
-                                }
-                            }
-                            RegCloseKey(hProfKey);
-                        }
-                    }
-                    sidSize = 256;
-                }
-                RegCloseKey(hKey);
-            }
-        }
-
     public:
         explicit RegistryManager(Core::Logger& logger) : log(logger) {}
 

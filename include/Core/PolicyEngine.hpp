@@ -235,10 +235,6 @@ namespace Aegis::Core {
         }
 
         bool ApplyPolicy(PolicyDefinition def) {
-            if (def.multiUser && def.rootHive == HKEY_CURRENT_USER) {
-                // In production, this intention delegates to RegistryManager::ApplyToOfflineHives for disconnected SIDs
-            }
-
             TransactionRecord tx;
             tx.sequence_number = ++current_sequence;
             // Sequence numbers are already durable and monotonic. Using the

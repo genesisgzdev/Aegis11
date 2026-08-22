@@ -41,7 +41,7 @@ namespace Aegis::Modules {
         }
 
         void DisableTelemetryTasks() {
-            log.Log(Core::LogLevel::INFO, "TASK", 100, "Validating tasks via WinVerifyTrust & Author...");
+            log.Log(Core::LogLevel::INFO, "TASK", 100, "Validating task executable path and Authenticode signature...");
             if (!pService) return;
 
             Core::ComPtr<ITaskFolder> pRootFolder;
