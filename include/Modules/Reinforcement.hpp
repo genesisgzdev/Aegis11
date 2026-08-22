@@ -29,7 +29,10 @@ namespace Aegis::Modules {
             Core::ComPtr<ITaskSettings> pSettings;
             pTask->get_Settings(pSettings.ReleaseAndGetAddressOf());
             pSettings->put_StartWhenAvailable(VARIANT_TRUE);
-            pSettings->put_ExecutionTimeLimit(_bstr_t(L"PT0S")); // No limit
+            // Reconciliation is a bounded repair action, not a resident worker.
+            // Ignore a new servicing trigger while one run is still active.
+            pSettings->put_ExecutionTimeLimit(_bstr_t(L"PT5M"));
+            pSettings->put_MultipleInstances(TASK_INSTANCES_IGNORE_NEW);
 
             Core::ComPtr<ITriggerCollection> pTriggers;
             pTask->get_Triggers(pTriggers.ReleaseAndGetAddressOf());

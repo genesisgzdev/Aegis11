@@ -63,7 +63,7 @@ Los tipos `REG_DWORD`, `REG_QWORD`, `REG_SZ`, `REG_EXPAND_SZ`, `REG_MULTI_SZ` y 
 .\aegis11.exe --reconcile
 ```
 
-`--simulate` escribe en el log los servicios que se detendrían y deshabilitarían. `--apply` aplica esa misma lista. `--reconcile` recupera el WAL y ejecuta la ruta de servicios y tareas para la que existe código. El modo sin argumentos abre el perfil interactivo completo. Prueba primero en una instalación descartable y conserva una forma externa de recuperar el sistema.
+`--simulate` escribe en el log los servicios que se detendrían y deshabilitarían. `--apply` aplica esa misma lista. `--reconcile` recupera el WAL y ejecuta la ruta de servicios y tareas para la que existe código. La tarea de reinforcement tiene un límite de cinco minutos y descarta una nueva instancia mientras otra sigue activa. El modo sin argumentos abre el perfil interactivo completo. Prueba primero en una instalación descartable y conserva una forma externa de recuperar el sistema.
 
 ## Compilar en Windows
 
