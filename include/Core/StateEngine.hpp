@@ -23,7 +23,7 @@ namespace Aegis::Engine {
             Core::SystemSnapshot snap;
             
             auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-            std::tm tm_now; localtime_s(&tm_now, &now);
+            std::tm tm_now; gmtime_s(&tm_now, &now);
             char time_buf[64]; std::strftime(time_buf, sizeof(time_buf), "%Y-%m-%dT%H:%M:%SZ", &tm_now);
             
             snap.timestamp = time_buf;

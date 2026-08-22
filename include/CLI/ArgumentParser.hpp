@@ -45,10 +45,10 @@ namespace Aegis::CLI {
             std::cout << "  Aegis11.exe [options]\n\n";
             std::cout << "Options:\n";
             std::cout << "  (none)                   Launch Interactive Menu (Default for double-click)\n";
-            std::cout << "  --snapshot <file.json>   Reserved; snapshot plumbing is not implemented.\n";
+            std::cout << "  --snapshot <file.json>   Write a baseline of the supported service, registry and task state.\n";
             std::cout << "  --apply                  Apply the Aegis Security Policy to the system.\n";
             std::cout << "  --simulate               Perform a dry-run of the policy application.\n";
-            std::cout << "  --restore <file.json>    Reserved; restore plumbing is not implemented.\n";
+            std::cout << "  --restore <file.json>    Reserved; restore from a baseline is not implemented.\n";
             std::cout << "  --reconcile              Recover the WAL and re-apply service/task checks.\n";
             std::cout << "  --help                   Show this menu.\n";
         }

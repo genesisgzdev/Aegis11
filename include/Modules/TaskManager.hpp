@@ -2,6 +2,7 @@
 #include "../Core/RAII.hpp"
 #include "../Core/Logger.hpp"
 #include "../Core/Utils.hpp"
+#include "../Core/State.hpp"
 #include <taskschd.h>
 #include <comdef.h>
 #include <string>
@@ -15,6 +16,28 @@ namespace Aegis::Modules {
         explicit TaskManager(Core::Logger& logger) : log(logger) {
             CoCreateInstance(CLSID_TaskScheduler, NULL, CLSCTX_INPROC_SERVER, IID_ITaskService, (void**)pService.ReleaseAndGetAddressOf());
             if (pService) pService->Connect(_variant_t(), _variant_t(), _variant_t(), _variant_t());
+        }
+
+        void Snapshot(Core::SystemSnapshot& snapshot) {
+            if (!pService) return;
+            Core::ComPtr<ITaskFolder> root;
+            if (FAILED(pService->GetFolder(_bstr_t(L"\\"), root.ReleaseAndGetAddressOf()))) return;
+            const wchar_t* knownTasks[] = {
+                L"Microsoft\\Windows\\Application Experience\\Microsoft Compatibility Appraiser",
+                L"Microsoft\\Windows\\Application Experience\\ProgramDataUpdater"
+            };
+            for (const auto* path : knownTasks) {
+                Core::ComPtr<IRegisteredTask> task;
+                const std::string key = Core::Utils::ws2s(path);
+                if (FAILED(root->GetTask(_bstr_t(path), task.ReleaseAndGetAddressOf()))) {
+                    snapshot.tasks[key] = Core::TaskState{key, false, false};
+                    continue;
+                }
+                VARIANT_BOOL enabled = VARIANT_FALSE;
+                if (SUCCEEDED(task->get_Enabled(&enabled))) {
+                    snapshot.tasks[key] = Core::TaskState{key, enabled == VARIANT_TRUE, true};
+                }
+            }
         }
 
         void DisableTelemetryTasks() {

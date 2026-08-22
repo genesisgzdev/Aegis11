@@ -20,7 +20,7 @@ El proyecto trabaja sobre componentes sensibles de Windows como registro, servic
 - `--reconcile` recupera el WAL y vuelve a aplicar las comprobaciones de servicios y tareas que hoy implementa el código.
 - `--simulate` solo muestra el plan de servicios y no simula todos los módulos interactivos.
 - La ejecución con privilegios, los cambios de red y la reconciliación sobre un sistema real necesitan validación específica en Windows.
-- La interfaz de snapshot y restore todavía no está implementada. El binario rechaza esas opciones para no informar un éxito falso.
+- `--snapshot <file.json>` escribe un baseline de los servicios, tareas y claves de registro que los módulos saben capturar. `--restore` sigue rechazado porque todavía no existe una restauración con paridad de estado.
 
 Esto no es un antivirus ni un EDR terminado. Es una base de ingeniería para control de estado y mitigación en Windows.
 
@@ -81,7 +81,7 @@ Aegis11 puede afectar conectividad, servicios, tareas y políticas del registro.
 
 La compilación y `tests/compile_checks.py` cubren el código y el build. Las pruebas en VM Windows cubren cambios reales de registro, servicios, tareas, WFP, firewall o Appx. La recuperación necesita una prueba propia del cambio y de su reversión.
 
-Snapshot y restore aparecen como opciones reservadas y se rechazan; no se ocultan detrás de un ejemplo que parezca operativo.
+El snapshot es una captura de estado, no un rollback. Restore sigue rechazado hasta que pueda restaurar servicios, tareas, ACL, triggers y valores de registro con la misma fidelidad.
 
 El flujo exacto por modo está en [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
