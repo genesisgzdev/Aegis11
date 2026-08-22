@@ -297,6 +297,23 @@ namespace Aegis::Core {
                     return false;
                 }
                 RegCloseKey(hKey);
+                // The mutation did not reach the requested value. Record the
+                // partial state and compensate before returning so the current
+                // process does not continue with an untracked registry change.
+                journal.back().state = TxState::PARTIAL_APPLY;
+                AtomicAppendJournal(journal.back());
+                const bool rolledBack = RollbackRecord(journal.back());
+                journal.back().state = rolledBack ? TxState::ROLLED_BACK : TxState::FAILED;
+                if (!AtomicAppendJournal(journal.back())) {
+                    log.Log(LogLevel::ERR, "WAL", 307, "Unable to persist the registry write failure result.");
+                }
+                return false;
+            }
+            // A pending record must not be left as the only durable outcome
+            // when the target key could not be opened or created.
+            journal.back().state = TxState::FAILED;
+            if (!AtomicAppendJournal(journal.back())) {
+                log.Log(LogLevel::ERR, "WAL", 308, "Unable to persist the registry open failure result.");
             }
             return false;
         }
