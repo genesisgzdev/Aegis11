@@ -86,5 +86,5 @@ stateDiagram-v2
 ## 4. Límite de validación
 
 - `tests/compile_checks.py` valida contratos de repo/CMake; Windows CI valida compilación.
-- No se ha demostrado aquí la ejecución privilegiada sobre registro, servicios, tareas, WFP, firewall o Appx.
+- No se ha demostrado aquí la ejecución privilegiada sobre registro, servicios, tareas, WFP, firewall o Appx. La comprobación posterior de WFP valida el proveedor que Aegis acaba de registrar; no interpreta un ping externo como prueba de salud.
 - Cualquier futura implementación de `--apply`, Balanced, Aggressive o tarea de auto-reconciliación debe probarse en VM/equipo Windows descartable con recuperación externa. Las rutas actuales las rechazan antes de mutar esos módulos.

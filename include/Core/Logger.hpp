@@ -16,8 +16,8 @@
 namespace Aegis::Core {
     enum class LogLevel { TRACE, DEBUG, INFO, WARN, ERR, FATAL };
 
-    // Aegis Custom ETW Provider GUID: {A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D}
-    static const GUID AEGIS_ETW_PROVIDER_GUID = { 0xa1b2c3d4, 0xe5f6, 0x7a8b, { 0x9c, 0x0d, 0x1e, 0x2f, 0x3a, 0x4b, 0x5c, 0x6d } };
+    // Stable ETW provider identifier owned by Aegis11.
+    static const GUID AEGIS_ETW_PROVIDER_GUID = { 0x9928b3e2, 0xd719, 0x4307, { 0x96, 0x3c, 0x3f, 0xa0, 0x0e, 0x5a, 0x93, 0xf3 } };
 
     class Logger {
         std::mutex mtx;

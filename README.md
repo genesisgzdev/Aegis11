@@ -84,7 +84,7 @@ El proyecto es Windows-only. El job de CI demuestra que el código compila y que
 
 Aegis11 puede afectar conectividad, servicios, tareas y políticas del registro. No lo ejecutes sobre equipos ajenos ni en producción sin una política revisada, una copia recuperable y una prueba de aceptación para cada módulo.
 
-La compilación y `tests/compile_checks.py` cubren el código y el build. Las pruebas en VM Windows cubren cambios reales de registro, servicios, tareas, WFP, firewall o Appx. La recuperación necesita una prueba propia del cambio y de su reversión.
+La compilación y `tests/compile_checks.py` cubren el código y el build. Las pruebas en VM Windows cubren cambios reales de registro, servicios, tareas, WFP, firewall o Appx. La ruta WFP verifica que el proveedor propio pueda leerse después del commit; la conectividad ICMP no se usa como sustituto de esa verificación. La recuperación necesita una prueba propia del cambio y de su reversión.
 
 El snapshot es una captura de estado, no un rollback. Restore sigue rechazado hasta que pueda restaurar servicios, tareas, ACL, triggers y valores de registro con la misma fidelidad. Las rutas actuales no cambian DACLs, recovery actions ni triggers de servicios porque esos datos todavía no forman parte del WAL.
 

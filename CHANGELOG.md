@@ -25,6 +25,7 @@
 
 ## [Unreleased]
 
+- Sustituye identificadores de ejemplo del proveedor, subcapa y ETW por GUID estables propios. La verificación posterior de WFP consulta el proveedor instalado y deja de usar ICMP contra una dirección pública como indicador de salud.
 - `--apply` deja de ejecutar mutaciones de servicios sin journal y devuelve exit code 3 hasta que exista rollback con paridad.
 - `--reconcile` queda limitado a recuperar el WAL; no modifica servicios ni tareas sin un snapshot journaled con rollback completo.
 - El registro automático de reinforcement queda desactivado hasta que sus mutaciones tengan paridad de recuperación.

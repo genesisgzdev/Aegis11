@@ -1,6 +1,4 @@
 ﻿#pragma once
-#include <winsock2.h>
-#include <ws2tcpip.h>
 #include "../Core/RAII.hpp"
 #include "../Core/Logger.hpp"
 #include <fwpmu.h>
@@ -18,27 +16,14 @@ static const GUID AEGIS_FWPM_LAYER_ALE_FLOW_ESTABLISHED_V4 = { 0x51409b15, 0x38f
 
 static const GUID AEGIS_FWPM_CONDITION_IP_REMOTE_ADDRESS = { 0x0066cf4d, 0x9f9a, 0x4d99, { 0xba, 0x66, 0x25, 0x8d, 0x02, 0x39, 0xf7, 0x1a } };
 static const GUID AEGIS_FWPM_CONDITION_IP_PROTOCOL = { 0x1aa0fae1, 0x86bd, 0x44a3, { 0x80, 0x86, 0x26, 0xd1, 0xe7, 0x47, 0xa1, 0xf6 } };
-static const GUID AEGIS_PROVIDER_GUID = { 0x1A2B3C4D, 0x5E6F, 0x7A8B, { 0x9C, 0x0D, 0x1E, 0x2F, 0x3A, 0x4B, 0x5C, 0x6D } };
-static const GUID AEGIS_SUBLAYER_GUID = { 0x11223344, 0x5566, 0x7788, { 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00 } };
+// Stable identifiers for objects owned by Aegis11. They must not change between
+// runs, otherwise cleanup cannot find rules created by an earlier run.
+static const GUID AEGIS_PROVIDER_GUID = { 0xae713b42, 0x4413, 0x4da6, { 0xb8, 0xb7, 0x33, 0x46, 0xdd, 0x42, 0x2a, 0x12 } };
+static const GUID AEGIS_SUBLAYER_GUID = { 0xd8ee0423, 0xd1a3, 0x4536, { 0xbf, 0x3c, 0x8b, 0x1f, 0x09, 0xf5, 0x25, 0x3f } };
 
 #ifndef FWPM_FILTER_FLAG_PERSISTENT
 #define FWPM_FILTER_FLAG_PERSISTENT (0x00000001)
 #endif
-
-// ICMP Structures for Dynamic API Resolution
-typedef struct {
-    ULONG Address;
-    ULONG Status;
-    ULONG RoundTripTime;
-    USHORT DataSize;
-    USHORT Reserved;
-    void* Data;
-    struct { UCHAR Ttl; UCHAR Tos; UCHAR Flags; UCHAR OptionsSize; void* OptionsData; } Options;
-} AEGIS_ICMP_ECHO_REPLY;
-
-typedef HANDLE (WINAPI *IcmpCreateFile_t)();
-typedef DWORD (WINAPI *IcmpSendEcho_t)(HANDLE, ULONG, LPVOID, WORD, LPVOID, LPVOID, DWORD, DWORD);
-typedef BOOL (WINAPI *IcmpCloseHandle_t)(HANDLE);
 
 namespace Aegis::Modules {
     class NetworkWfp {
@@ -55,39 +40,11 @@ namespace Aegis::Modules {
             return false;
         }
 
-        bool HealthCheckConnectivity() {
-            HMODULE hIpHlp = LoadLibraryW(L"iphlpapi.dll");
-            if (!hIpHlp) return false;
-
-            auto pIcmpCreateFile = (IcmpCreateFile_t)GetProcAddress(hIpHlp, "IcmpCreateFile");
-            auto pIcmpSendEcho = (IcmpSendEcho_t)GetProcAddress(hIpHlp, "IcmpSendEcho");
-            auto pIcmpCloseHandle = (IcmpCloseHandle_t)GetProcAddress(hIpHlp, "IcmpCloseHandle");
-
-            if (!pIcmpCreateFile || !pIcmpSendEcho || !pIcmpCloseHandle) {
-                FreeLibrary(hIpHlp);
-                return false;
-            }
-
-            HANDLE hIcmpFile = pIcmpCreateFile();
-            if (hIcmpFile == INVALID_HANDLE_VALUE) {
-                FreeLibrary(hIpHlp);
-                return false;
-            }
-
-            char SendData[32] = "AegisHealthCheck";
-            DWORD ReplySize = sizeof(AEGIS_ICMP_ECHO_REPLY) + sizeof(SendData) + 8;
-            LPVOID ReplyBuffer = (VOID*)malloc(ReplySize);
-
-            // Ping 1.1.1.1 using modern memory-safe parsing
-            ULONG ipAddr = 0;
-            InetPtonA(AF_INET, "1.1.1.1", &ipAddr);
-            DWORD dwRetVal = pIcmpSendEcho(hIcmpFile, ipAddr, SendData, sizeof(SendData), NULL, ReplyBuffer, ReplySize, 2000);
-            
-            bool ok = (dwRetVal > 0);
-            free(ReplyBuffer);
-            pIcmpCloseHandle(hIcmpFile);
-            FreeLibrary(hIpHlp);
-            return ok;
+        bool VerifyProvider(HANDLE engine) {
+            FWPM_PROVIDER0* provider = nullptr;
+            const DWORD status = FwpmProviderGetByKey0(engine, &AEGIS_PROVIDER_GUID, &provider);
+            if (provider) FwpmFreeMemory0(reinterpret_cast<void**>(&provider));
+            return status == ERROR_SUCCESS;
         }
 
     public:
@@ -176,11 +133,11 @@ namespace Aegis::Modules {
             }
 
             if (FwpmTransactionCommit0(engine.get()) == ERROR_SUCCESS) {
-                log.Log(Core::LogLevel::INFO, "WFP", 201, "Transaction committed. Performing Network Health Check...");
-                if (!HealthCheckConnectivity()) {
-                    log.Log(Core::LogLevel::ERR, "WFP", 502, "Health check failed post-commit. Traffic completely dropped? Requires manual review.");
+                log.Log(Core::LogLevel::INFO, "WFP", 201, "Transaction committed. Verifying the owned provider...");
+                if (!VerifyProvider(engine.get())) {
+                    log.Log(Core::LogLevel::ERR, "WFP", 502, "The transaction committed but the owned provider could not be read back.");
                 } else {
-                    log.Log(Core::LogLevel::INFO, "WFP", 202, "Health check passed. Base routing unaffected.");
+                    log.Log(Core::LogLevel::INFO, "WFP", 202, "Owned provider verified. Network reachability was not used as a WFP health signal.");
                 }
             } else {
                 FwpmTransactionAbort0(engine.get());
