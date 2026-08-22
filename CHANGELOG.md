@@ -25,6 +25,8 @@
 
 ## [Unreleased]
 
+- `--reconcile` queda limitado a recuperar el WAL; no modifica servicios ni tareas sin un snapshot journaled con rollback completo.
+- El registro automático de reinforcement queda desactivado hasta que sus mutaciones tengan paridad de recuperación.
 - Si una escritura de registro falla después del `PENDING`, la ruta persiste el estado parcial, intenta revertirlo y guarda el resultado antes de devolver error.
 - El rollback interactivo conserva el WAL cuando una reversión falla o no puede quedar registrada.
 - El rollback interactivo comprueba también que el archivo WAL se haya podido retirar antes de informar éxito.
