@@ -25,6 +25,7 @@ require("include/Core/PolicyEngine.hpp", 'Unable to persist the failed commit re
 require("include/Core/PolicyEngine.hpp", 'Unable to persist the registry write failure result.')
 require("include/Core/PolicyEngine.hpp", 'journal.back().state = TxState::PARTIAL_APPLY;')
 require("include/Core/PolicyEngine.hpp", 'journal.back().state = TxState::FAILED;')
+require("include/Core/PolicyEngine.hpp", 'the WAL was retained for another recovery attempt.')
 require("include/Core/PolicyEngine.hpp", 'const LONG result = RegDeleteTreeW(root, path.c_str());')
 require("include/Core/StateEngine.hpp", 'SysInfo::GetCapabilities')
 require("include/Core/StateEngine.hpp", 'MOVEFILE_WRITE_THROUGH')

@@ -26,6 +26,7 @@
 ## [Unreleased]
 
 - Si una escritura de registro falla después del `PENDING`, la ruta persiste el estado parcial, intenta revertirlo y guarda el resultado antes de devolver error.
+- El rollback interactivo conserva el WAL cuando una reversión falla o no puede quedar registrada.
 
 ## [0.1.1] - 2026-08-20
 

@@ -318,12 +318,31 @@ namespace Aegis::Core {
             return false;
         }
 
-        void RollbackAll() {
+        bool RollbackAll() {
+            bool allRolledBack = true;
             for (auto it = journal.rbegin(); it != journal.rend(); ++it) {
-                if (it->state == TxState::COMMITTED) RollbackRecord(*it);
+                if (it->state != TxState::COMMITTED) continue;
+                if (!RollbackRecord(*it)) {
+                    allRolledBack = false;
+                    it->state = TxState::FAILED;
+                    if (!AtomicAppendJournal(*it)) {
+                        log.Log(LogLevel::ERR, "WAL", 309, "Unable to persist an interactive rollback failure.");
+                    }
+                    continue;
+                }
+                it->state = TxState::ROLLED_BACK;
+                if (!AtomicAppendJournal(*it)) {
+                    allRolledBack = false;
+                    log.Log(LogLevel::ERR, "WAL", 310, "Unable to persist an interactive rollback result.");
+                }
+            }
+            if (!allRolledBack) {
+                log.Log(LogLevel::ERR, "WAL", 311, "Rollback incomplete; the WAL was retained for another recovery attempt.");
+                return false;
             }
             journal.clear();
             std::filesystem::remove(journalPath);
+            return true;
         }
     };
 }

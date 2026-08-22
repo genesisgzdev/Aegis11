@@ -142,7 +142,14 @@ namespace Aegis::UI {
                             netOpt.UniversalHardening();
                         }
                         break;
-                    case 'r': case 'R': engine.RollbackAll(); Core::ProcessHost::CurrentState = Core::AppState::NORMAL; break;
+                    case 'r': case 'R':
+                        if (engine.RollbackAll()) {
+                            Core::ProcessHost::CurrentState = Core::AppState::NORMAL;
+                        } else {
+                            Core::ProcessHost::CurrentState = Core::AppState::RECOVERY;
+                            std::cout << "[!] Rollback incomplete. The WAL was retained for another attempt.\n";
+                        }
+                        break;
                     case '0': running = false; break;
                 }
                 if(running) { std::cout << "\nOperation Complete. Press Enter to return..."; std::cin.ignore(); std::cin.get(); }
