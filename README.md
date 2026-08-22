@@ -31,6 +31,7 @@ Esto no es un antivirus ni un EDR terminado. Es una base de ingeniería para con
 ## Flujo y límites
 
 - `PolicyEngine` y el WAL coordinan transacciones y recuperación
+- `--reconcile` usa la recuperación que ejecuta `PolicyEngine` al construirse y después aplica servicios y tareas una sola vez
 - `Registry`, `Service` y `Task` inspeccionan y aplican políticas del sistema
 - `NetworkWfp` y `FirewallManager` encapsulan las capas de filtrado
 - `AppxManager` y `DataPurge` cubren operaciones de paquetes y limpieza

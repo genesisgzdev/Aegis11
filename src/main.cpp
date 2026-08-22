@@ -80,7 +80,9 @@ int main(int argc, char* argv[]) {
     if (runConfig.reconcile) {
         log.SetTraceId("RECONCILE");
         log.Log(LogLevel::INFO, "SYS", 100, "Automated Reconciliation Triggered.");
-        engine.LoadAndRecover();
+        // PolicyEngine already loads and recovers the durable journal in its
+        // constructor. Keep reconciliation single-entry so a recovery result
+        // is not replayed immediately by the same process.
         sm.EnforcePolicy(false);
         tm.DisableTelemetryTasks();
         return 0;
