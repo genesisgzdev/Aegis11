@@ -25,6 +25,7 @@
 
 ## [Unreleased]
 
+- `--apply` deja de ejecutar mutaciones de servicios sin journal y devuelve exit code 3 hasta que exista rollback con paridad.
 - `--reconcile` queda limitado a recuperar el WAL; no modifica servicios ni tareas sin un snapshot journaled con rollback completo.
 - El registro automático de reinforcement queda desactivado hasta que sus mutaciones tengan paridad de recuperación.
 - Si una escritura de registro falla después del `PENDING`, la ruta persiste el estado parcial, intenta revertirlo y guarda el resultado antes de devolver error.

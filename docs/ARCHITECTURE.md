@@ -13,7 +13,7 @@ flowchart TD
     MAIN[main program] --> P[argument parser]
     P -->|invalid/help| EXIT[exit 2 or 0]
     P -->|--simulate| DRY[ServiceManager dry-run]
-    P -->|--apply| APPLY[ServiceManager fixed service list]
+    P -->|--apply| APPLY[reject: no journal parity]
     P -->|--reconcile| REC[PolicyEngine LoadAndRecover]
     REC --> SAFE[No unjournaled mutation]
     P -->|no args or --interactive| UI[InteractiveShell]

@@ -7,7 +7,7 @@
 
 Aegis11 es un controlador de políticas para Windows. Su objetivo es aplicar una configuración deseada, registrar los cambios y volver a comprobar el estado cuando el sistema se desvía de esa configuración.
 
-En 30 segundos: `--simulate` muestra el plan de servicios, `--apply` aplica esa ruta fija y `--reconcile` recupera únicamente el WAL durable. `--snapshot` captura el estado que los módulos soportan sin cargar la ruta de recuperación; los modos son mutuamente excluyentes. Sin argumentos abre el modo interactivo, que expone más módulos. Es una base de control de estado, no un antivirus ni un EDR certificado.
+En 30 segundos: `--simulate` muestra el plan de servicios, `--apply` se rechaza porque esa ruta todavía no tiene rollback journaled con paridad y `--reconcile` recupera únicamente el WAL durable. `--snapshot` captura el estado que los módulos soportan sin cargar la ruta de recuperación; los modos son mutuamente excluyentes. Sin argumentos abre el modo interactivo, que expone más módulos. Es una base de control de estado, no un antivirus ni un EDR certificado.
 
 El proyecto trabaja sobre componentes sensibles de Windows como registro, servicios, tareas programadas y Windows Filtering Platform. Por eso el README separa lo que compila de lo que todavía necesita pruebas nativas en una máquina Windows aislada.
 
@@ -16,7 +16,7 @@ El proyecto trabaja sobre componentes sensibles de Windows como registro, servic
 - La ruta reproducible de compilación usa Visual Studio 2022, MSVC v143, Windows SDK 10.0.22000 o superior y CMake 3.21 o superior.
 - GitHub Actions comprueba la compilación de Windows y los checks del repositorio.
 - `--reconcile`, `--simulate` y `--apply` están expuestos por la CLI.
-- `--apply` ejecuta la lista fija de servicios de `ServiceManager`; no equivale al perfil interactivo Aggressive.
+- `--apply` está expuesto para detectar la opción, pero termina con exit code 3 hasta que la mutación de servicios tenga snapshot y rollback con paridad; no equivale al perfil interactivo Aggressive.
 - `--reconcile` recupera el WAL y no modifica servicios ni tareas: esas mutaciones todavía no tienen snapshot y rollback con paridad.
 - Si una mutación de registro falla después de escribir `PENDING`, la ruta marca el estado parcial, intenta compensarlo y guarda el resultado antes de devolver error.
 - La opción `R` solo borra el WAL cuando todas las reversiones terminan correctamente; si una falla, conserva el journal y mantiene el proceso en estado de recuperación.
@@ -68,7 +68,7 @@ Los tipos `REG_DWORD`, `REG_QWORD`, `REG_SZ`, `REG_EXPAND_SZ`, `REG_MULTI_SZ` y 
 .\aegis11.exe --reconcile
 ```
 
-`--simulate` escribe en el log los servicios que se detendrían y deshabilitarían. `--apply` aplica esa misma lista. `--reconcile` recupera el WAL y no ejecuta cambios de servicios o tareas sin journal. El registro automático de reinforcement está desactivado hasta que esa mutación tenga rollback con paridad. El modo sin argumentos abre el perfil interactivo completo. Prueba primero en una instalación descartable y conserva una forma externa de recuperar el sistema.
+`--simulate` escribe en el log los servicios que se detendrían y deshabilitarían. `--apply` termina con exit code 3 porque la ruta de servicios todavía no tiene rollback journaled. `--reconcile` recupera el WAL y no ejecuta cambios de servicios o tareas sin journal. El registro automático de reinforcement está desactivado hasta que esa mutación tenga rollback con paridad. El modo sin argumentos abre el perfil interactivo completo. Prueba primero en una instalación descartable y conserva una forma externa de recuperar el sistema.
 
 ## Compilar en Windows
 

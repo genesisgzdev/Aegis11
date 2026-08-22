@@ -56,8 +56,8 @@ int main(int argc, char* argv[]) {
         return 0;
     }
     if (runConfig.apply) {
-        sm.EnforcePolicy(false);
-        return 0;
+        std::cerr << "[!] --apply is disabled: service mutations are not journaled with rollback parity yet. Use --simulate or the reviewed interactive path.\n";
+        return 3;
     }
     if (!runConfig.snapshot_file.empty()) {
         Aegis::Engine::StateController state(log, sm, rm, tm);

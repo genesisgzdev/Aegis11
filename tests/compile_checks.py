@@ -31,6 +31,7 @@ require("include/Core/PolicyEngine.hpp", 'const LONG result = RegDeleteTreeW(roo
 require("include/Core/StateEngine.hpp", 'SysInfo::GetCapabilities')
 require("include/Core/StateEngine.hpp", 'MOVEFILE_WRITE_THROUGH')
 require("include/Modules/TaskManager.hpp", 'Core::Utils::VerifyDigitalSignature(exePath)')
+require("src/main.cpp", '"[!] --apply is disabled: service mutations are not journaled with rollback parity yet.')
 if 'authorMatch || sigMatch' in (ROOT / "include/Modules/TaskManager.hpp").read_text(encoding="utf-8-sig"):
     raise AssertionError("task trust must not accept author metadata without signature verification")
 if 'Windows 11 (Dynamic)' in (ROOT / "include/Core/StateEngine.hpp").read_text(encoding="utf-8-sig"):
