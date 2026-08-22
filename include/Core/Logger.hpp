@@ -112,6 +112,12 @@ namespace Aegis::Core {
             currentTraceId = traceId;
         }
 
+        // Keep the short form used by legacy modules while preserving the
+        // structured event id in the canonical logger path.
+        void Log(LogLevel level, const std::string& category, const std::string& message) {
+            Log(level, category, 0, message);
+        }
+
         void Log(LogLevel level, const std::string& category, int eventId, const std::string& message, uint32_t latencyMs = 0) {
             std::lock_guard<std::mutex> lock(mtx);
             RotateLogIfNeeded();
