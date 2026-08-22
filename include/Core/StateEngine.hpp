@@ -19,11 +19,11 @@ namespace Aegis::Engine {
             : log(l), sm(s), rm(r), tm(t) {}
 
         void CreateBaseline(const std::string& filepath) {
-            log.Log(Core::LogLevel::L_INFO, "STATE", "Creating global system baseline snapshot...");
+            log.Log(Core::LogLevel::INFO, "STATE", "Creating global system baseline snapshot...");
             Core::SystemSnapshot snap;
             
             auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-            std::tm tm_now; localtime_s(&tm_now, &now);
+            std::tm tm_now; gmtime_s(&tm_now, &now);
             char time_buf[64]; std::strftime(time_buf, sizeof(time_buf), "%Y-%m-%dT%H:%M:%SZ", &tm_now);
             
             snap.timestamp = time_buf;
@@ -37,9 +37,9 @@ namespace Aegis::Engine {
             if (out.is_open()) {
                 nlohmann::json j = snap;
                 out << std::setw(4) << j << std::endl;
-                log.Log(Core::LogLevel::L_INFO, "STATE", "Baseline saved to: " + filepath);
+                log.Log(Core::LogLevel::INFO, "STATE", "Baseline saved to: " + filepath);
             } else {
-                log.Log(Core::LogLevel::L_ERR, "STATE", "Failed to write snapshot file.");
+                log.Log(Core::LogLevel::ERR, "STATE", "Failed to write snapshot file.");
             }
         }
     };

@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "../Core/RAII.hpp"
 #include "../Core/Logger.hpp"
+#include "../Core/State.hpp"
 #include <windows.h>
 #include <winsvc.h>
 #include <string>
@@ -23,6 +24,28 @@ namespace Aegis::Modules {
 
     public:
         explicit ServiceManager(Core::Logger& logger) : log(logger) {}
+
+        void Snapshot(Core::SystemSnapshot& snapshot) {
+            const std::vector<std::wstring> targets = {
+                L"DiagTrack", L"dmwappushservice", L"WerSvc", L"PcaSvc", L"edgeupdate", L"edgeupdatem"
+            };
+            ScHandle hSCM(OpenSCManagerW(NULL, NULL, SC_MANAGER_CONNECT));
+            if (!hSCM) return;
+            for (const auto& name : targets) {
+                ScHandle service(OpenServiceW(hSCM.get(), name.c_str(), SERVICE_QUERY_CONFIG | SERVICE_QUERY_STATUS));
+                if (!service) continue;
+                DWORD bytes = 0;
+                QueryServiceConfigW(service.get(), nullptr, 0, &bytes);
+                if (!bytes) continue;
+                std::vector<BYTE> buffer(bytes);
+                auto* config = reinterpret_cast<LPQUERY_SERVICE_CONFIGW>(buffer.data());
+                if (!QueryServiceConfigW(service.get(), config, bytes, &bytes)) continue;
+                SERVICE_STATUS status{};
+                if (!QueryServiceStatus(service.get(), &status)) continue;
+                const std::string key = Core::Utils::ws2s(name);
+                snapshot.services[key] = Core::ServiceState{key, config->dwStartType, status.dwCurrentState};
+            }
+        }
 
         void NeutralizeService(const std::wstring& name) {
             ScHandle hSCM(OpenSCManagerW(NULL, NULL, SC_MANAGER_ALL_ACCESS));
@@ -50,7 +73,7 @@ namespace Aegis::Modules {
         }
 
         void EnforcePolicy(bool dryRun) {
-            std::vector<std::wstring> targets = { L"DiagTrack", L"dmwappushservice", L"WerSvc", L"PcaSvc", L"edgeupdate", L"edgeupdatem" };
+            const std::vector<std::wstring> targets = { L"DiagTrack", L"dmwappushservice", L"WerSvc", L"PcaSvc", L"edgeupdate", L"edgeupdatem" };
             for (const auto& s : targets) {
                 if (dryRun) {
                     log.Log(Core::LogLevel::INFO, "SVC", 150, "Dry-run: would stop and disable service: " + Core::Utils::ws2s(s));

@@ -45,7 +45,7 @@ namespace Aegis::Modules {
     public:
         explicit CopilotManager(Core::Logger& logger) : log(logger) {}
         void Eradicate(bool dryRun) {
-            log.Log(Core::LogLevel::L_INFO, "AI", "Neutralizing Windows Copilot infrastructure...");
+            log.Log(Core::LogLevel::INFO, "AI", "Neutralizing Windows Copilot infrastructure...");
             if (dryRun) return;
             HKEY h;
             std::wstring path = _X("Software\\Policies\\Microsoft\\Windows\\WindowsCopilot");
@@ -54,7 +54,7 @@ namespace Aegis::Modules {
                 DWORD val = 1; RegSetValueExW(hk.get(), _X("TurnOffWindowsCopilot").c_str(), 0, REG_DWORD, (const BYTE*)&val, 4);
                 LockRegistryKey(HKEY_CURRENT_USER, path);
             }
-            log.Log(Core::LogLevel::L_INFO, "DONE", "Copilot neutralized and LOCKED via DACL.");
+            log.Log(Core::LogLevel::INFO, "DONE", "Copilot neutralized and LOCKED via DACL.");
         }
     };
 }

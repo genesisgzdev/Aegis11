@@ -24,7 +24,7 @@ flowchart TD
     UI --> W[Reinforcement servicing event task]
 ~~~
 
-`--snapshot` y `--restore` son opciones parser-only: `main.cpp` las rechaza con exit code 3. No hay un archivo de snapshot que conecte el CLI con `RegistryManager`.
+`--snapshot <file.json>` conecta `main.cpp` con `StateController` y escribe el baseline de los servicios, tareas y valores de registro que tienen captura implementada. `--restore` sigue rechazado con exit code 3; el archivo no se presenta como mecanismo de rollback.
 
 ## 2. Transacción de política de registro
 

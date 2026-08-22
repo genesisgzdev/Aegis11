@@ -1,6 +1,7 @@
 ﻿#include "../include/Core/RAII.hpp"
 #include "../include/Core/Logger.hpp"
 #include "../include/Core/PolicyEngine.hpp"
+#include "../include/Core/StateEngine.hpp"
 #include "../include/Core/ProcessHost.hpp"
 #include "../include/Core/SysInfo.hpp"
 #include "../include/CLI/ArgumentParser.hpp"
@@ -49,6 +50,7 @@ int main(int argc, char* argv[]) {
     PolicyEngine engine(log);
     AppxManager am(log);
     TaskManager tm(log);
+    RegistryManager rm(log);
     NetworkWfp nw(log);
     ServiceManager sm(log);
     FirewallManager fm(log);
@@ -76,8 +78,13 @@ int main(int argc, char* argv[]) {
         sm.EnforcePolicy(false);
         return 0;
     }
-    if (!runConfig.snapshot_file.empty() || !runConfig.restore_file.empty()) {
-        std::cerr << "[!] Snapshot/restore CLI plumbing is not implemented; refusing a false success.\n";
+    if (!runConfig.snapshot_file.empty()) {
+        Aegis::Engine::StateController state(log, sm, rm, tm);
+        state.CreateBaseline(runConfig.snapshot_file);
+        return 0;
+    }
+    if (!runConfig.restore_file.empty()) {
+        std::cerr << "[!] Restore is not implemented; refusing to claim a rollback from a baseline file.\n";
         return 3;
     }
 
