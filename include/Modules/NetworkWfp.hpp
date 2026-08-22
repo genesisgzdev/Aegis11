@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include <winsock2.h>
 #include "../Core/RAII.hpp"
 #include "../Core/Logger.hpp"
 #include <fwpmu.h>
