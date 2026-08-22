@@ -23,6 +23,10 @@ require("include/Core/PolicyEngine.hpp", 'latestById')
 require("include/Core/PolicyEngine.hpp", 'tx-" + std::to_string(tx.sequence_number)')
 require("include/Core/PolicyEngine.hpp", 'Unable to persist the failed commit recovery result.')
 require("include/Core/PolicyEngine.hpp", 'const LONG result = RegDeleteTreeW(root, path.c_str());')
+require("include/Core/StateEngine.hpp", 'SysInfo::GetCapabilities')
+require("include/Core/StateEngine.hpp", 'MOVEFILE_WRITE_THROUGH')
+if 'Windows 11 (Dynamic)' in (ROOT / "include/Core/StateEngine.hpp").read_text(encoding="utf-8-sig"):
+    raise AssertionError("snapshot must not contain a hardcoded operating-system version")
 
 for path in ROOT.rglob("*"):
     if path.is_file() and path.suffix in {".cpp", ".hpp", ".h", ".bat", ".yml", ".yaml"}:

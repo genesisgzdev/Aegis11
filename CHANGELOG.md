@@ -6,6 +6,7 @@
 
 - Limita la tarea de reinforcement a cinco minutos y evita instancias concurrentes durante servicing.
 - Rechaza combinaciones de modos CLI y mantiene snapshot, simulate y apply fuera de la recuperación del WAL.
+- Captura la versión real del sistema y reemplaza el baseline mediante un archivo temporal con escritura duradera.
 
 ### Fixed
 
