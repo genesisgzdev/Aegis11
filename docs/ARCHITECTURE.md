@@ -10,7 +10,7 @@ La primera figura es un mapa de modos, no una promesa de que todos los módulos 
 
 ~~~mermaid
 flowchart TD
-    MAIN[main.cpp] --> P[ArgumentParser]
+    MAIN[main program] --> P[argument parser]
     P -->|invalid/help| EXIT[exit 2 or 0]
     P -->|--simulate| DRY[ServiceManager dry-run]
     P -->|--apply| APPLY[ServiceManager fixed service list]
@@ -18,10 +18,10 @@ flowchart TD
     REC --> S[ServiceManager apply]
     REC --> T[TaskManager disable two known tasks]
     P -->|no args or --interactive| UI[InteractiveShell]
-    UI --> L[Light: PolicyEngine registry writes]
-    UI --> B[Balanced: registry + services + tasks + Appx Edge/OneDrive]
-    UI --> A[Aggressive: WFP + firewall + Appx + purge + network optimizer]
-    UI --> W[Reinforcement servicing-event scheduled task]
+    UI --> L[Light registry writes]
+    UI --> B[Balanced registry services tasks and apps]
+    UI --> A[Aggressive WFP firewall apps purge and network]
+    UI --> W[Reinforcement servicing event task]
 ~~~
 
 `--snapshot` y `--restore` son opciones parser-only: `main.cpp` las rechaza con exit code 3. No hay un archivo de snapshot que conecte el CLI con `RegistryManager`.
@@ -32,17 +32,17 @@ flowchart TD
 sequenceDiagram
     participant UI as InteractiveShell
     participant PE as PolicyEngine
-    participant WAL as aegis_wal.jsonl
+    participant WAL as recovery log
     participant REG as Windows Registry
     UI->>PE: ApplyPolicy definition
     PE->>REG: read current key/value
     alt target already equal
       PE-->>UI: true without new transaction
     else drift or missing
-      PE->>WAL: append PENDING + FNV integrity + commit marker
-      PE->>REG: RegCreateKeyEx + RegSetValueEx
+    PE->>WAL: append pending record with integrity
+    PE->>REG: create key and set value
       alt write succeeds
-        PE->>WAL: append COMMITTED + FlushFileBuffers
+        PE->>WAL: append committed record and flush
         PE-->>UI: true
       else write or durable commit fails
         PE->>REG: RollbackRecord
@@ -58,7 +58,7 @@ El WAL usa entradas alineadas a 4096 bytes, FNV-1a sobre el payload, marcador fi
 ~~~mermaid
 stateDiagram-v2
     [*] --> PENDING: append before registry write
-    PENDING --> COMMITTED: registry write + durable WAL append
+    PENDING --> COMMITTED: registry write and durable log append
     PENDING --> RECOVERY_APPLIED: startup rollback
     PARTIAL_APPLY --> RECOVERY_APPLIED: startup rollback
     COMMITTED --> ROLLED_BACK: interactive R
