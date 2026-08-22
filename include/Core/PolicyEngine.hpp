@@ -340,8 +340,13 @@ namespace Aegis::Core {
                 log.Log(LogLevel::ERR, "WAL", 311, "Rollback incomplete; the WAL was retained for another recovery attempt.");
                 return false;
             }
+            std::error_code removeError;
+            const bool removed = std::filesystem::remove(journalPath, removeError);
+            if (removeError || (!removed && std::filesystem::exists(journalPath))) {
+                log.Log(LogLevel::ERR, "WAL", 312, "Rollback completed but the WAL could not be removed.");
+                return false;
+            }
             journal.clear();
-            std::filesystem::remove(journalPath);
             return true;
         }
     };
