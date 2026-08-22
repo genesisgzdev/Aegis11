@@ -54,17 +54,9 @@ namespace Aegis::Modules {
             ScHandle hSvc(OpenServiceW(hSCM.get(), name.c_str(), SERVICE_STOP | SERVICE_CHANGE_CONFIG | SERVICE_QUERY_CONFIG));
             if (!hSvc) return;
 
-            // 1. Disable Recovery Actions (Anti-Restart)
-            SERVICE_FAILURE_ACTIONS fa = {0};
-            fa.dwResetPeriod = INFINITE;
-            ChangeServiceConfig2W(hSvc.get(), SERVICE_CONFIG_FAILURE_ACTIONS, &fa);
-
-            // Advanced mitigation: Wipe Trigger-Start Events (WNF, ETW, Network State Changes)
-            SERVICE_TRIGGER_INFO triggerInfo = {0};
-            triggerInfo.cTriggers = 0; // Wipe array
-            ChangeServiceConfig2W(hSvc.get(), SERVICE_CONFIG_TRIGGER_INFO, &triggerInfo);
-
-            // 2. Stop and Disable
+            // Only change the running/start state currently represented by the
+            // service snapshot. Recovery actions and trigger definitions are
+            // intentionally preserved until they have a journaled snapshot.
             SERVICE_STATUS ss;
             ControlService(hSvc.get(), SERVICE_CONTROL_STOP, &ss);
             ChangeServiceConfigW(hSvc.get(), SERVICE_NO_CHANGE, SERVICE_DISABLED, SERVICE_NO_CHANGE, NULL, NULL, NULL, NULL, NULL, NULL, NULL);

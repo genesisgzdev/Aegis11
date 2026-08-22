@@ -4,8 +4,6 @@
 #include "../Core/Obfuscation.hpp"
 #include "../Core/State.hpp"
 #include <windows.h>
-#include <aclapi.h>
-#include <sddl.h>
 #include <string>
 #include <map>
 
@@ -14,56 +12,6 @@
 namespace Aegis::Modules {
     class RegistryManager {
         Core::Logger& log;
-
-        // Kernel-Level DACL Hardening: Denies write access to SYSTEM and TrustedInstaller
-        bool LockRegistryKey(HKEY root, const std::wstring& path) {
-            std::wstring rootStr;
-            if (root == HKEY_LOCAL_MACHINE) rootStr = L"MACHINE\\";
-            else if (root == HKEY_CURRENT_USER) rootStr = L"CURRENT_USER\\";
-            else return false;
-
-            std::wstring fullPath = rootStr + path;
-            PSID pSystemSID = NULL, pTiSID = NULL;
-            
-            // SID for NT AUTHORITY\SYSTEM
-            if (!ConvertStringSidToSidW(L"S-1-5-18", &pSystemSID)) return false;
-            // SID for NT SERVICE\TrustedInstaller
-            if (!ConvertStringSidToSidW(L"S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464", &pTiSID)) {
-                LocalFree(pSystemSID); return false;
-            }
-
-            PACL pOldDACL = NULL, pNewDACL = NULL;
-            PSECURITY_DESCRIPTOR pSD = NULL;
-            if (GetNamedSecurityInfoW(fullPath.c_str(), SE_REGISTRY_KEY, DACL_SECURITY_INFORMATION, NULL, NULL, &pOldDACL, NULL, &pSD) != ERROR_SUCCESS) {
-                LocalFree(pSystemSID); LocalFree(pTiSID); return false;
-            }
-
-            EXPLICIT_ACCESS_W ea[2] = {0};
-            // We allow READ so the OS doesn't crash, but completely deny WRITE/DELETE/CHANGE_PERMISSIONS
-            DWORD denyMask = KEY_WRITE | DELETE | WRITE_DAC | WRITE_OWNER;
-
-            ea[0].grfAccessPermissions = denyMask;
-            ea[0].grfAccessMode = DENY_ACCESS;
-            ea[0].grfInheritance = SUB_CONTAINERS_AND_OBJECTS_INHERIT;
-            ea[0].Trustee.TrusteeForm = TRUSTEE_IS_SID;
-            ea[0].Trustee.TrusteeType = TRUSTEE_IS_WELL_KNOWN_GROUP;
-            ea[0].Trustee.ptstrName = (LPWSTR)pSystemSID;
-
-            ea[1].grfAccessPermissions = denyMask;
-            ea[1].grfAccessMode = DENY_ACCESS;
-            ea[1].grfInheritance = SUB_CONTAINERS_AND_OBJECTS_INHERIT;
-            ea[1].Trustee.TrusteeForm = TRUSTEE_IS_SID;
-            ea[1].Trustee.TrusteeType = TRUSTEE_IS_WELL_KNOWN_GROUP;
-            ea[1].Trustee.ptstrName = (LPWSTR)pTiSID;
-
-            bool success = false;
-            if (SetEntriesInAclW(2, ea, pOldDACL, &pNewDACL) == ERROR_SUCCESS) {
-                success = (SetNamedSecurityInfoW((LPWSTR)fullPath.c_str(), SE_REGISTRY_KEY, DACL_SECURITY_INFORMATION, NULL, NULL, pNewDACL, NULL) == ERROR_SUCCESS);
-                LocalFree(pNewDACL);
-            }
-            if (pSD) LocalFree(pSD); LocalFree(pSystemSID); LocalFree(pTiSID);
-            return success;
-        }
 
         // Real-time Kernel Token Privilege Escalation for Backup/Restore Operations
         bool EnablePrivilege(LPCWSTR privName) {
@@ -151,8 +99,6 @@ namespace Aegis::Modules {
                     Core::RegHandle hk = Core::RegHandle::From(raw_hk);
                     if (!dryRun) {
                         RegSetValueExW(hk.get(), k.c_str(), 0, REG_DWORD, (const BYTE*)&tv, sizeof(tv));
-                        // Lock the key so Windows Update cannot overwrite it
-                        LockRegistryKey(r, p);
                     } else {
                         log.Log(Core::LogLevel::INFO, "DRY-RUN", "Would set and LOCK policy: " + std::string(k.begin(), k.end()));
                     }
@@ -169,7 +115,7 @@ namespace Aegis::Modules {
             apply(HKEY_LOCAL_MACHINE, _X("SOFTWARE\\Policies\\Microsoft\\Windows\\System"), _X("EnableActivityFeed"), 0);
             apply(HKEY_CURRENT_USER, _X("Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo"), _X("Enabled"), 0);
             
-            if (!dryRun) log.Log(Core::LogLevel::INFO, "DONE", "Registry policies enforced and locked via Kernel DACLs.");
+            if (!dryRun) log.Log(Core::LogLevel::INFO, "DONE", "Registry policies enforced; ACLs were left unchanged because they are not journaled.");
         }
     };
 }

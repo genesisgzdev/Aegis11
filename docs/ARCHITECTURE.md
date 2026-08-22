@@ -58,6 +58,10 @@ sequenceDiagram
 
 El WAL usa entradas alineadas a 4096 bytes, FNV-1a sobre el payload, marcador final `0xAA` y `FlushFileBuffers`. Eso describe integridad de escritura; no equivale a snapshot completo ni rollback de todos los módulos.
 
+Las rutas de registro, Copilot y Edge no modifican DACLs como efecto lateral. La ruta de servicios solo cambia estado de ejecución e inicio; conserva recovery actions y triggers. Cada descriptor o configuración adicional solo podrá cambiarse cuando tenga captura, restauración y estado de conflicto dentro del mismo contrato de recuperación.
+
+La desactivación de tareas exige una acción dentro de `System32` con firma digital válida. El campo `Author` del XML se trata como metadato no confiable y no autoriza una mutación.
+
 ## 3. Recuperación y persistencia
 
 ~~~mermaid

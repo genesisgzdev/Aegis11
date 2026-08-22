@@ -82,7 +82,9 @@ Aegis11 puede afectar conectividad, servicios, tareas y políticas del registro.
 
 La compilación y `tests/compile_checks.py` cubren el código y el build. Las pruebas en VM Windows cubren cambios reales de registro, servicios, tareas, WFP, firewall o Appx. La recuperación necesita una prueba propia del cambio y de su reversión.
 
-El snapshot es una captura de estado, no un rollback. Restore sigue rechazado hasta que pueda restaurar servicios, tareas, ACL, triggers y valores de registro con la misma fidelidad.
+El snapshot es una captura de estado, no un rollback. Restore sigue rechazado hasta que pueda restaurar servicios, tareas, ACL, triggers y valores de registro con la misma fidelidad. Las rutas actuales no cambian DACLs, recovery actions ni triggers de servicios porque esos datos todavía no forman parte del WAL.
+
+Las tareas solo se deshabilitan cuando su acción apunta a un ejecutable dentro de `System32` y la firma digital se verifica correctamente. El campo Author del XML no se usa como identidad.
 
 El flujo exacto por modo está en [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
