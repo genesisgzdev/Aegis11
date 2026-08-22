@@ -19,6 +19,7 @@ El proyecto trabaja sobre componentes sensibles de Windows como registro, servic
 - `--apply` está expuesto para detectar la opción, pero termina con exit code 3 hasta que las mutaciones tengan snapshot y rollback con paridad. El menú interactivo también rechaza Balanced y Aggressive por la misma razón.
 - `--reconcile` recupera el WAL y no modifica servicios ni tareas: esas mutaciones todavía no tienen snapshot y rollback con paridad.
 - Si una mutación de registro falla después de escribir `PENDING`, la ruta marca el estado parcial, intenta compensarlo y guarda el resultado antes de devolver error.
+- Antes de compensar una mutación de registro, el WAL compara el tipo y los bytes actuales con el valor que escribió. Si otro proceso lo cambió, conserva el journal y no sobrescribe ni borra ese cambio.
 - La opción `R` solo borra el WAL cuando todas las reversiones terminan correctamente; si una falla, conserva el journal y mantiene el proceso en estado de recuperación.
 - Si las reversiones terminan pero el archivo WAL no puede borrarse, la operación también se considera incompleta.
 - `--simulate` solo muestra el plan de servicios y no simula todos los módulos interactivos.

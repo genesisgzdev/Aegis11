@@ -54,6 +54,7 @@ namespace Aegis::Core {
         bool valueExistedBefore;
         uint32_t originalType;
         std::vector<BYTE> originalData;
+        uint32_t targetType = REG_BINARY;
         std::vector<BYTE> targetData;
 
         json to_json() const {
@@ -62,7 +63,7 @@ namespace Aegis::Core {
                 {"eng_v", engine_version}, {"pol_v", policy_version}, {"rootHive", rootHive}, 
                 {"path", path}, {"key", key}, {"state", static_cast<int>(state)}, {"keyExistedBefore", keyExistedBefore},
                 {"valueExistedBefore", valueExistedBefore}, {"originalType", originalType},
-                {"originalData", originalData}, {"targetData", targetData}
+                {"originalData", originalData}, {"targetType", targetType}, {"targetData", targetData}
             };
         }
 
@@ -78,6 +79,7 @@ namespace Aegis::Core {
             tx.keyExistedBefore = j.value("keyExistedBefore", false);
             tx.valueExistedBefore = j.value("valueExistedBefore", false);
             tx.originalType = j.value("originalType", 0U);
+            tx.targetType = j.value("targetType", REG_BINARY);
             tx.originalData = j.value("originalData", std::vector<BYTE>());
             tx.targetData = j.value("targetData", std::vector<BYTE>());
             return tx;
@@ -215,23 +217,53 @@ namespace Aegis::Core {
             HKEY root = (HKEY)tx.rootHive;
             std::wstring path = Utils::s2ws(tx.path);
             std::wstring key = Utils::s2ws(tx.key);
-            if (!tx.keyExistedBefore) {
-                const LONG result = RegDeleteTreeW(root, path.c_str());
-                return result == ERROR_SUCCESS || result == ERROR_FILE_NOT_FOUND;
-            } else {
-                HKEY hKey;
-                if (RegOpenKeyExW(root, path.c_str(), 0, KEY_WRITE | KEY_WOW64_64KEY, &hKey) == ERROR_SUCCESS) {
-                    LONG result = ERROR_SUCCESS;
-                    if (tx.valueExistedBefore) {
-                        result = RegSetValueExW(hKey, key.c_str(), 0, tx.originalType, tx.originalData.data(), (DWORD)tx.originalData.size());
-                    } else {
-                        result = RegDeleteValueW(hKey, key.c_str());
-                    }
-                    RegCloseKey(hKey);
-                    return result == ERROR_SUCCESS || result == ERROR_FILE_NOT_FOUND;
-                }
+            HKEY hKey;
+            const LONG openResult = RegOpenKeyExW(root, path.c_str(), 0, KEY_READ | KEY_WRITE | KEY_WOW64_64KEY, &hKey);
+            if (openResult == ERROR_FILE_NOT_FOUND || openResult == ERROR_PATH_NOT_FOUND) {
+                return !tx.keyExistedBefore;
             }
-            return false;
+            if (openResult != ERROR_SUCCESS) return false;
+
+            DWORD currentType = 0;
+            DWORD currentSize = 0;
+            const LONG querySize = RegQueryValueExW(hKey, key.c_str(), nullptr, &currentType, nullptr, &currentSize);
+            if (querySize == ERROR_FILE_NOT_FOUND) {
+                RegCloseKey(hKey);
+                return !tx.valueExistedBefore;
+            }
+            if (querySize != ERROR_SUCCESS) {
+                RegCloseKey(hKey);
+                return false;
+            }
+
+            std::vector<BYTE> currentData(currentSize);
+            const LONG queryData = RegQueryValueExW(hKey, key.c_str(), nullptr, &currentType, currentData.data(), &currentSize);
+            if (queryData != ERROR_SUCCESS || currentType != tx.targetType || currentSize != tx.targetData.size() ||
+                (currentSize != 0 && memcmp(currentData.data(), tx.targetData.data(), currentSize) != 0)) {
+                // Do not overwrite a value that changed after this transaction.
+                RegCloseKey(hKey);
+                return false;
+            }
+
+            LONG result = ERROR_SUCCESS;
+            if (tx.keyExistedBefore) {
+                if (tx.valueExistedBefore) {
+                    result = RegSetValueExW(hKey, key.c_str(), 0, tx.originalType, tx.originalData.data(), (DWORD)tx.originalData.size());
+                } else {
+                    result = RegDeleteValueW(hKey, key.c_str());
+                }
+            } else {
+                // Remove only the value created by this transaction. The key is
+                // deleted only when Windows confirms that nothing else remains.
+                result = RegDeleteValueW(hKey, key.c_str());
+            }
+            RegCloseKey(hKey);
+            if (result != ERROR_SUCCESS && result != ERROR_FILE_NOT_FOUND) return false;
+            if (!tx.keyExistedBefore) {
+                const LONG deleteKey = RegDeleteKeyW(root, path.c_str());
+                return deleteKey == ERROR_SUCCESS || deleteKey == ERROR_FILE_NOT_FOUND || deleteKey == ERROR_PATH_NOT_FOUND || deleteKey == ERROR_DIR_NOT_EMPTY;
+            }
+            return true;
         }
 
         bool ApplyPolicy(PolicyDefinition def) {
@@ -247,6 +279,14 @@ namespace Aegis::Core {
             tx.key = Utils::ws2s(def.key);
             tx.key_fingerprint = Utils::FNV1a64(tx.path + "\\" + tx.key);
             tx.state = TxState::PENDING;
+            switch (def.type) {
+                case RegType::DWORD: tx.targetType = REG_DWORD; break;
+                case RegType::QWORD: tx.targetType = REG_QWORD; break;
+                case RegType::SZ: tx.targetType = REG_SZ; break;
+                case RegType::EXPAND_SZ: tx.targetType = REG_EXPAND_SZ; break;
+                case RegType::MULTI_SZ: tx.targetType = REG_MULTI_SZ; break;
+                case RegType::BINARY: tx.targetType = REG_BINARY; break;
+            }
             tx.targetData = def.targetData;
 
             HKEY hKey;

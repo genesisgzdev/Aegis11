@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Actualiza la acción de checkout del build Windows a la generación que ejecuta sobre Node 24.
+- El rollback del WAL comprueba tipo y bytes antes de revertir y deja intactos cambios externos detectados en la clave.
 
 ## [0.1.2] - 2026-08-22
 
