@@ -7,7 +7,7 @@
 
 Aegis11 es un controlador de políticas para Windows. Su objetivo es aplicar una configuración deseada, registrar los cambios y volver a comprobar el estado cuando el sistema se desvía de esa configuración.
 
-En 30 segundos: `--simulate` muestra el plan de servicios, `--apply` se rechaza porque esa ruta todavía no tiene rollback journaled con paridad y `--reconcile` recupera únicamente el WAL durable. `--snapshot` captura el estado que los módulos soportan sin cargar la ruta de recuperación; los modos son mutuamente excluyentes. Sin argumentos abre el modo interactivo, que expone más módulos. Es una base de control de estado, no un antivirus ni un EDR certificado.
+En 30 segundos: `--simulate` muestra el plan de servicios, `--apply` se rechaza porque esa ruta todavía no tiene rollback journaled con paridad y `--reconcile` recupera únicamente el WAL durable. `--snapshot` captura el estado que los módulos soportan sin cargar la ruta de recuperación; los modos son mutuamente excluyentes. Sin argumentos abre el modo interactivo: Light puede aplicar cambios de registro por el WAL; Balanced y Aggressive se rechazan hasta tener rollback entre módulos. Es una base de control de estado, no un antivirus ni un EDR certificado.
 
 El proyecto trabaja sobre componentes sensibles de Windows como registro, servicios, tareas programadas y Windows Filtering Platform. Por eso el README separa lo que compila de lo que todavía necesita pruebas nativas en una máquina Windows aislada.
 
@@ -42,15 +42,15 @@ Esto no es un antivirus ni un EDR terminado. Es una base de ingeniería para con
 flowchart LR
     A[CLI] --> B{modo}
     B -->|simulate| C[plan de servicios sin aplicar]
-    B -->|apply| D[ServiceManager]
+    B -->|apply| D[rechazado: sin rollback de servicios]
     B -->|reconcile| E[WAL recovery]
-    E --> D
+    E --> J[sin mutaciones no journaled]
     B -->|sin argumentos| F[InteractiveShell]
-    F --> G[Policy Registry Network and Tasks]
-    D --> H[estado Windows]
-    G --> H
-    D -. transacción .-> I[WAL JSONL]
-    G -. transacción .-> I
+    F --> G[Light: cambios de registro]
+    F --> K[Balanced: rechazado]
+    F --> L[Aggressive: rechazado]
+    G --> H[estado Windows]
+    G -. transacción .-> I[WAL JSONL]
 ```
 
 La vista separa las rutas que realmente existen. Los nombres de módulos no son evidencia de que cada capacidad esté validada en runtime.
@@ -68,7 +68,7 @@ Los tipos `REG_DWORD`, `REG_QWORD`, `REG_SZ`, `REG_EXPAND_SZ`, `REG_MULTI_SZ` y 
 .\aegis11.exe --reconcile
 ```
 
-`--simulate` escribe en el log los servicios que se detendrían y deshabilitarían. `--apply` termina con exit code 3 porque la ruta de servicios todavía no tiene rollback journaled. `--reconcile` recupera el WAL y no ejecuta cambios de servicios o tareas sin journal. El registro automático de reinforcement está desactivado hasta que esa mutación tenga rollback con paridad. El modo sin argumentos abre el perfil interactivo completo. Prueba primero en una instalación descartable y conserva una forma externa de recuperar el sistema.
+`--simulate` escribe en el log los servicios que se detendrían y deshabilitarían. `--apply` termina con exit code 3 porque la ruta de servicios todavía no tiene rollback journaled. `--reconcile` recupera el WAL y no ejecuta cambios de servicios o tareas sin journal. El registro automático de reinforcement está desactivado hasta que esa mutación tenga rollback con paridad. El modo sin argumentos abre el menú interactivo; solo Light ejecuta cambios de registro y los perfiles que no tienen rollback entre módulos se rechazan. Prueba primero en una instalación descartable y conserva una forma externa de recuperar el sistema.
 
 ## Compilar en Windows
 
