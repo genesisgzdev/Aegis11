@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- Limita la tarea de reinforcement a cinco minutos y evita instancias concurrentes durante servicing.
+
+### Fixed
+
 - Lee el payload WAL por longitud antes de localizar su checksum.
 - Reconstruye una sola vez el último estado durable de cada transacción antes de recuperar, evitando revertir un `PENDING` histórico después de un `COMMITTED`.
 - Persiste el resultado de la recuperación y distingue rollback completado de rollback fallido.
