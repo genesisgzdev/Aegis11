@@ -10,6 +10,9 @@ def require(path: str, text: str) -> None:
         raise AssertionError(f"{path} does not contain required marker: {text}")
 
 require("CMakeLists.txt", 'project(Aegis11 VERSION 0.1.1 LANGUAGES CXX RC)')
+require("include/Core/PolicyEngine.hpp", '#define AEGIS_ENGINE_VERSION "0.1.1"')
+require("include/Core/PolicyEngine.hpp", 'case RegType::QWORD: winType = REG_QWORD; break;')
+require("include/Core/PolicyEngine.hpp", 'case RegType::MULTI_SZ: winType = REG_MULTI_SZ; break;')
 require("CMakeLists.txt", 'add_executable(aegis11\n')
 require("include/Core/Logger.hpp", 'EscapeJsonString')
 require("include/Modules/NetworkWfp.hpp", 'FwpmFilterAdd0')

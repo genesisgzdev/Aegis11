@@ -28,7 +28,7 @@ namespace Aegis::CLI {
         }
 
         static void PrintHeader() {
-            std::cout << "\nAegis11 System Controller [Version 1.0.0]\n";
+            std::cout << "\nAegis11 System Controller [Version 0.1.1]\n";
             std::cout << "Copyright (c) 2026. All rights reserved.\n\n";
         }
 

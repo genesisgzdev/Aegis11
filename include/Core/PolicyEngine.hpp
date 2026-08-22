@@ -18,7 +18,7 @@
 #include <cstring>
 #include <malloc.h>
 
-#define AEGIS_ENGINE_VERSION "1.0.0"
+#define AEGIS_ENGINE_VERSION "0.1.1"
 #define WAL_SECTOR_SIZE 4096
 
 using json = nlohmann::json;
@@ -238,7 +238,15 @@ namespace Aegis::Core {
             }
 
             if (RegCreateKeyExW(def.rootHive, def.path.c_str(), 0, nullptr, 0, KEY_WRITE | KEY_WOW64_64KEY, nullptr, &hKey, nullptr) == ERROR_SUCCESS) {
-                DWORD winType = (def.type == RegType::SZ) ? REG_SZ : REG_DWORD;
+                DWORD winType = REG_BINARY;
+                switch (def.type) {
+                    case RegType::DWORD: winType = REG_DWORD; break;
+                    case RegType::QWORD: winType = REG_QWORD; break;
+                    case RegType::SZ: winType = REG_SZ; break;
+                    case RegType::EXPAND_SZ: winType = REG_EXPAND_SZ; break;
+                    case RegType::MULTI_SZ: winType = REG_MULTI_SZ; break;
+                    case RegType::BINARY: winType = REG_BINARY; break;
+                }
                 if (RegSetValueExW(hKey, def.key.c_str(), 0, winType, def.targetData.data(), (DWORD)def.targetData.size()) == ERROR_SUCCESS) {
                     RegCloseKey(hKey);
                     journal.back().state = TxState::COMMITTED;
