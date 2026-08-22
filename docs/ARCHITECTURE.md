@@ -69,6 +69,7 @@ stateDiagram-v2
 
 - Constructor de `PolicyEngine` llama `LoadAndRecover`; `--reconcile` lo vuelve a llamar antes de ejecutar servicios y tareas.
 - El parser usa la longitud del payload para localizar el checksum; no interpreta el último separador como si fuera parte del payload.
+- La reconstrucción agrupa los registros por `id` y conserva solo el último estado durable antes de decidir si debe recuperar. El `PENDING` histórico de una transacción que terminó en `COMMITTED` ya no dispara un rollback falso.
 - Tras el rollback de arranque se añade un registro `RECOVERY_APPLIED` o `FAILED`, de modo que el siguiente arranque puede distinguir una recuperación terminada de una que no pudo completarse.
 - Interactive `R` revierte solo registros marcados `COMMITTED` y elimina `aegis_wal.jsonl`.
 - `Reinforcement` se registra solo desde la ruta interactiva y dispara por eventos de servicing de Windows con argumento `--reconcile`.

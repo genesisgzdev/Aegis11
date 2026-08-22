@@ -12,6 +12,7 @@
 #include <fstream>
 #include <mutex>
 #include <map>
+#include <unordered_map>
 #include <algorithm>
 #include <limits>
 #include <exception>
@@ -168,7 +169,31 @@ namespace Aegis::Core {
                 }
             }
             
-            // Sequence-guaranteed sorting for deterministic WAL replay
+            // Sequence-guaranteed sorting for deterministic WAL replay.
+            std::sort(journal.begin(), journal.end(), [](const TransactionRecord& a, const TransactionRecord& b) {
+                return a.sequence_number < b.sequence_number;
+            });
+
+            // A transaction writes more than one record (PENDING, then COMMITTED
+            // or a recovery result). Replay only its latest durable state. If
+            // this collapse is skipped, a successful transaction is followed by
+            // its historical PENDING record and gets rolled back on every boot.
+            std::vector<TransactionRecord> latest;
+            std::unordered_map<std::string, size_t> latestById;
+            for (const auto& tx : journal) {
+                if (tx.id.empty()) {
+                    latest.push_back(tx);
+                    continue;
+                }
+                const auto found = latestById.find(tx.id);
+                if (found == latestById.end()) {
+                    latestById.emplace(tx.id, latest.size());
+                    latest.push_back(tx);
+                } else {
+                    latest[found->second] = tx;
+                }
+            }
+            journal = std::move(latest);
             std::sort(journal.begin(), journal.end(), [](const TransactionRecord& a, const TransactionRecord& b) {
                 return a.sequence_number < b.sequence_number;
             });
@@ -265,7 +290,11 @@ namespace Aegis::Core {
                     journal.back().state = TxState::COMMITTED;
                     if (AtomicAppendJournal(journal.back())) return true;
                     log.Log(LogLevel::FATAL, "WAL", 304, "Unable to durably append committed transaction; reverting policy.");
-                    RollbackRecord(journal.back());
+                    const bool rolledBack = RollbackRecord(journal.back());
+                    journal.back().state = rolledBack ? TxState::ROLLED_BACK : TxState::FAILED;
+                    if (!AtomicAppendJournal(journal.back())) {
+                        log.Log(LogLevel::ERR, "WAL", 306, "Unable to persist the failed commit recovery result.");
+                    }
                     return false;
                 }
                 RegCloseKey(hKey);

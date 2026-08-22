@@ -5,7 +5,9 @@
 ### Fixed
 
 - Lee el payload WAL por longitud antes de localizar su checksum.
+- Reconstruye una sola vez el último estado durable de cada transacción antes de recuperar, evitando revertir un `PENDING` histórico después de un `COMMITTED`.
 - Persiste el resultado de la recuperación y distingue rollback completado de rollback fallido.
+- Persiste también el resultado de una reversión cuando falla el append del registro `COMMITTED`.
 - Escribe los seis tipos de registro declarados con su tipo Win32 correspondiente.
 
 ## [0.1.1] - 2026-08-20
