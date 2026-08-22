@@ -5,6 +5,7 @@
 ### Fixed
 
 - Limita la tarea de reinforcement a cinco minutos y evita instancias concurrentes durante servicing.
+- Rechaza combinaciones de modos CLI y mantiene snapshot, simulate y apply fuera de la recuperación del WAL.
 
 ### Fixed
 
