@@ -8,7 +8,7 @@ La primera figura es un mapa de modos, no una promesa de que todos los módulos 
 
 ## 1. Enrutamiento por modo
 
-~~~mermaid
+```mermaid
 flowchart TD
     MAIN[main program] --> P[argument parser]
     P -->|invalid/help| EXIT[exit 2 or 0]
@@ -23,7 +23,7 @@ flowchart TD
     UI --> B[Balanced registry services tasks and apps]
     UI --> A[Aggressive WFP firewall apps purge and network]
     UI --> W[Reinforcement servicing event task]
-~~~
+```
 
 `--snapshot <file.json>` conecta `main.cpp` con `StateController` y escribe el baseline de los servicios, tareas y valores de registro que tienen captura implementada. `--restore` sigue rechazado con exit code 3; el archivo no se presenta como mecanismo de rollback.
 
@@ -33,7 +33,7 @@ El snapshot toma la versión y build mediante `SysInfo::GetCapabilities` y seria
 
 ## 2. Transacción de política de registro
 
-~~~mermaid
+```mermaid
 sequenceDiagram
     participant UI as InteractiveShell
     participant PE as PolicyEngine
@@ -54,7 +54,7 @@ sequenceDiagram
         PE-->>UI: false
       end
     end
-~~~
+```
 
 El WAL usa entradas alineadas a 4096 bytes, FNV-1a sobre el payload, marcador final `0xAA` y `FlushFileBuffers`. Eso describe integridad de escritura; no equivale a snapshot completo ni rollback de todos los módulos.
 
@@ -64,7 +64,7 @@ La desactivación de tareas exige una acción dentro de `System32` con firma dig
 
 ## 3. Recuperación y persistencia
 
-~~~mermaid
+```mermaid
 stateDiagram-v2
     [*] --> PENDING: append before registry write
     PENDING --> COMMITTED: registry write and durable log append
@@ -74,7 +74,7 @@ stateDiagram-v2
     COMMITTED --> ROLLED_BACK: interactive R
     FAILED --> [*]
     RECOVERY_APPLIED --> [*]
-~~~
+```
 
 - Constructor de `PolicyEngine` llama `LoadAndRecover`; `--reconcile` lo vuelve a llamar antes de ejecutar servicios y tareas.
 - El parser usa la longitud del payload para localizar el checksum; no interpreta el último separador como si fuera parte del payload.
