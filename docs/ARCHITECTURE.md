@@ -13,14 +13,14 @@ flowchart TD
     MAIN[main program] --> P[argument parser]
     P -->|invalid/help| EXIT[exit 2 or 0]
     P -->|--simulate| DRY[ServiceManager dry-run]
-    P -->|--apply| APPLY[reject: no journal parity]
+    P -->|--apply| APPLY["reject: no journal parity"]
     P -->|--reconcile| REC[PolicyEngine LoadAndRecover]
     REC --> SAFE[No unjournaled mutation]
     P -->|no args or --interactive| UI[InteractiveShell]
     P -->|--snapshot| SNAP[StateController read supported state]
     UI --> L[Light registry writes]
-    UI --> B[Balanced rejected: no cross-module rollback parity]
-    UI --> A[Aggressive rejected: non-journaled or irreversible operations]
+    UI --> B["Balanced rejected: no cross-module rollback parity"]
+    UI --> A["Aggressive rejected: non-journaled or irreversible operations"]
 ```
 
 `--snapshot <file.json>` conecta `main.cpp` con `StateController` y escribe el baseline de los servicios, tareas y valores de registro que tienen captura implementada. `--restore` sigue rechazado con exit code 3; el archivo no se presenta como mecanismo de rollback.

@@ -42,13 +42,13 @@ Esto no es un antivirus ni un EDR terminado. Es una base de ingeniería para con
 flowchart LR
     A[CLI] --> B{modo}
     B -->|simulate| C[plan de servicios sin aplicar]
-    B -->|apply| D[rechazado: sin rollback de servicios]
+    B -->|apply| D["rechazado: sin rollback de servicios"]
     B -->|reconcile| E[WAL recovery]
     E --> J[sin mutaciones no journaled]
     B -->|sin argumentos| F[InteractiveShell]
-    F --> G[Light: cambios de registro]
-    F --> K[Balanced: rechazado]
-    F --> L[Aggressive: rechazado]
+    F --> G["Light: cambios de registro"]
+    F --> K["Balanced: rechazado"]
+    F --> L["Aggressive: rechazado"]
     G --> H[estado Windows]
     G -. transacción .-> I[WAL JSONL]
 ```
