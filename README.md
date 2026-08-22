@@ -16,7 +16,7 @@ El proyecto trabaja sobre componentes sensibles de Windows como registro, servic
 - La ruta reproducible de compilación usa Visual Studio 2022, MSVC v143, Windows SDK 10.0.22000 o superior y CMake 3.21 o superior.
 - GitHub Actions comprueba la compilación de Windows y los checks del repositorio.
 - `--reconcile`, `--simulate` y `--apply` están expuestos por la CLI.
-- `--apply` está expuesto para detectar la opción, pero termina con exit code 3 hasta que la mutación de servicios tenga snapshot y rollback con paridad; no equivale al perfil interactivo Aggressive.
+- `--apply` está expuesto para detectar la opción, pero termina con exit code 3 hasta que las mutaciones tengan snapshot y rollback con paridad. El menú interactivo también rechaza Balanced y Aggressive por la misma razón.
 - `--reconcile` recupera el WAL y no modifica servicios ni tareas: esas mutaciones todavía no tienen snapshot y rollback con paridad.
 - Si una mutación de registro falla después de escribir `PENDING`, la ruta marca el estado parcial, intenta compensarlo y guarda el resultado antes de devolver error.
 - La opción `R` solo borra el WAL cuando todas las reversiones terminan correctamente; si una falla, conserva el journal y mantiene el proceso en estado de recuperación.

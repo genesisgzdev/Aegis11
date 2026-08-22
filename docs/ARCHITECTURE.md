@@ -19,8 +19,8 @@ flowchart TD
     P -->|no args or --interactive| UI[InteractiveShell]
     P -->|--snapshot| SNAP[StateController read supported state]
     UI --> L[Light registry writes]
-    UI --> B[Balanced registry services tasks and apps]
-    UI --> A[Aggressive WFP firewall apps purge and network]
+    UI --> B[Balanced rejected: no cross-module rollback parity]
+    UI --> A[Aggressive rejected: non-journaled or irreversible operations]
 ```
 
 `--snapshot <file.json>` conecta `main.cpp` con `StateController` y escribe el baseline de los servicios, tareas y valores de registro que tienen captura implementada. `--restore` sigue rechazado con exit code 3; el archivo no se presenta como mecanismo de rollback.
@@ -87,4 +87,4 @@ stateDiagram-v2
 
 - `tests/compile_checks.py` valida contratos de repo/CMake; Windows CI valida compilación.
 - No se ha demostrado aquí la ejecución privilegiada sobre registro, servicios, tareas, WFP, firewall o Appx.
-- Cualquier prueba de `--apply`, perfil Aggressive o tarea de auto-reconciliación debe ejecutarse en VM/equipo Windows descartable con recuperación externa.
+- Cualquier futura implementación de `--apply`, Balanced, Aggressive o tarea de auto-reconciliación debe probarse en VM/equipo Windows descartable con recuperación externa. Las rutas actuales las rechazan antes de mutar esos módulos.

@@ -38,8 +38,8 @@ namespace Aegis::UI {
         void PrintMenu() {
             std::cout << "\n Mitigation Presets:\n";
             std::cout << "  [1] Light (Safe GPOs, No App removal)\n";
-            std::cout << "  [2] Balanced (GPOs, Services, Tasks, Edge/OneDrive)\n";
-            std::cout << "  [3] Aggressive (Balanced, Appx Removal, WFP Kernel Block, FW COM)\n";
+            std::cout << "  [2] Balanced (reservado: no hay rollback entre módulos)\n";
+            std::cout << "  [3] Aggressive (reservado: incluye operaciones irreversibles)\n";
             std::cout << "  [R] Rollback WAL Database\n";
             std::cout << "  [0] Exit\n\n> ";
         }
@@ -90,7 +90,7 @@ namespace Aegis::UI {
                 std::cout << " [WFP] Will commit Network Layer block for telemetry endpoints\n";
             }
             
-            std::cout << "\nType 'YES' to authorize atomic execution: ";
+            std::cout << "\nType 'YES' to authorize the journaled registry profile: ";
             std::string ans; std::cin >> ans;
             return (ans == "YES");
         }
@@ -121,26 +121,11 @@ namespace Aegis::UI {
                             for (const auto& p : basePols) engine.ApplyPolicy(p); 
                         }
                         break;
-                    case '2': 
-                        if (ConfirmExecution(basePols, "BALANCED")) {
-                            for (const auto& p : basePols) engine.ApplyPolicy(p);
-                            svc.EnforcePolicy(false);
-                            tasks.DisableTelemetryTasks();
-                            appx.RemoveEdgeAndOneDrive();
-                        }
+                    case '2':
+                        std::cout << "[!] Balanced is disabled: service, task and Appx mutations do not yet share a journaled rollback plan.\n";
                         break;
-                    case '3': 
-                        if (ConfirmExecution(basePols, "AGGRESSIVE")) {
-                            for (const auto& p : basePols) engine.ApplyPolicy(p);
-                            svc.EnforcePolicy(false);
-                            tasks.DisableTelemetryTasks();
-                            fw.EnforceBlockRules(false);
-                            wfp.EnforceHardBlock(false);
-                            appx.RemoveEdgeAndOneDrive();
-                            appx.RemoveBloatware(true);
-                            data.Execute(false);
-                            netOpt.UniversalHardening();
-                        }
+                    case '3':
+                        std::cout << "[!] Aggressive is disabled: it includes non-journaled and potentially irreversible operations.\n";
                         break;
                     case 'r': case 'R':
                         if (engine.RollbackAll()) {

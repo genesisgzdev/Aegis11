@@ -32,6 +32,12 @@ require("include/Core/StateEngine.hpp", 'SysInfo::GetCapabilities')
 require("include/Core/StateEngine.hpp", 'MOVEFILE_WRITE_THROUGH')
 require("include/Modules/TaskManager.hpp", 'Core::Utils::VerifyDigitalSignature(exePath)')
 require("src/main.cpp", '"[!] --apply is disabled: service mutations are not journaled with rollback parity yet.')
+require("include/UI/InteractiveShell.hpp", '"[!] Balanced is disabled: service, task and Appx mutations do not yet share a journaled rollback plan.')
+require("include/UI/InteractiveShell.hpp", '"[!] Aggressive is disabled: it includes non-journaled and potentially irreversible operations.')
+if 'svc.EnforcePolicy(false)' in (ROOT / "include/UI/InteractiveShell.hpp").read_text(encoding="utf-8-sig"):
+    raise AssertionError("interactive profiles must not mutate services outside the journal")
+if 'tasks.DisableTelemetryTasks()' in (ROOT / "include/UI/InteractiveShell.hpp").read_text(encoding="utf-8-sig"):
+    raise AssertionError("interactive profiles must not mutate tasks outside the journal")
 if 'authorMatch || sigMatch' in (ROOT / "include/Modules/TaskManager.hpp").read_text(encoding="utf-8-sig"):
     raise AssertionError("task trust must not accept author metadata without signature verification")
 if 'Windows 11 (Dynamic)' in (ROOT / "include/Core/StateEngine.hpp").read_text(encoding="utf-8-sig"):
