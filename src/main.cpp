@@ -13,7 +13,6 @@
 #include "../include/Modules/FirewallManager.hpp"
 #include "../include/Modules/DataPurge.hpp"
 #include "../include/Modules/NetworkOptimizer.hpp"
-#include "../include/Modules/Reinforcement.hpp"
 #include <iostream>
 #include <algorithm>
 #include <roapi.h>
@@ -57,8 +56,8 @@ int main(int argc, char* argv[]) {
         return 0;
     }
     if (runConfig.apply) {
-        sm.EnforcePolicy(false);
-        return 0;
+        std::cerr << "[!] --apply is disabled: service mutations are not journaled with rollback parity yet. Use --simulate or the reviewed interactive path.\n";
+        return 3;
     }
     if (!runConfig.snapshot_file.empty()) {
         Aegis::Engine::StateController state(log, sm, rm, tm);
@@ -80,17 +79,13 @@ int main(int argc, char* argv[]) {
     if (runConfig.reconcile) {
         log.SetTraceId("RECONCILE");
         log.Log(LogLevel::INFO, "SYS", 100, "Automated Reconciliation Triggered.");
-        engine.LoadAndRecover();
-        sm.EnforcePolicy(false);
-        tm.DisableTelemetryTasks();
+        // PolicyEngine already loads and recovers the durable journal in its
+        // constructor. Services and tasks are not changed here because their
+        // rollback-complete snapshots are not yet part of the WAL.
         return 0;
     }
 
-    Reinforcement rf(log);
     InteractiveShell shell(log, engine, am, tm, nw, sm, fm, dp, no);
-    
-    // Register Reinforcement Task on every interactive run to ensure persistence
-    rf.RegisterSelfHealingTask();
 
     shell.Run();
 

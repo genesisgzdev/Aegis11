@@ -2,11 +2,13 @@
 #include "../Core/RAII.hpp"
 #include "../Core/Logger.hpp"
 #include "../Core/State.hpp"
+#include "../Core/Utils.hpp"
 #include <windows.h>
 #include <winsvc.h>
 #include <string>
 #include <vector>
 #include <set>
+#include <utility>
 
 namespace Aegis::Modules {
     class ScHandle {
@@ -43,7 +45,21 @@ namespace Aegis::Modules {
                 SERVICE_STATUS status{};
                 if (!QueryServiceStatus(service.get(), &status)) continue;
                 const std::string key = Core::Utils::ws2s(name);
-                snapshot.services[key] = Core::ServiceState{key, config->dwStartType, status.dwCurrentState};
+                Core::ServiceState state;
+                state.name = key;
+                state.serviceType = config->dwServiceType;
+                state.startType = config->dwStartType;
+                state.errorControl = config->dwErrorControl;
+                state.currentState = status.dwCurrentState;
+                state.binaryPath = config->lpBinaryPathName ? Core::Utils::ws2s(config->lpBinaryPathName) : "";
+                state.loadOrderGroup = config->lpLoadOrderGroup ? Core::Utils::ws2s(config->lpLoadOrderGroup) : "";
+                state.accountName = config->lpServiceStartName ? Core::Utils::ws2s(config->lpServiceStartName) : "";
+                if (config->lpDependencies) {
+                    for (const wchar_t* dependency = config->lpDependencies; *dependency; dependency += wcslen(dependency) + 1) {
+                        state.dependencies.push_back(Core::Utils::ws2s(dependency));
+                    }
+                }
+                snapshot.services[key] = std::move(state);
             }
         }
 
@@ -54,22 +70,14 @@ namespace Aegis::Modules {
             ScHandle hSvc(OpenServiceW(hSCM.get(), name.c_str(), SERVICE_STOP | SERVICE_CHANGE_CONFIG | SERVICE_QUERY_CONFIG));
             if (!hSvc) return;
 
-            // 1. Disable Recovery Actions (Anti-Restart)
-            SERVICE_FAILURE_ACTIONS fa = {0};
-            fa.dwResetPeriod = INFINITE;
-            ChangeServiceConfig2W(hSvc.get(), SERVICE_CONFIG_FAILURE_ACTIONS, &fa);
-
-            // Advanced mitigation: Wipe Trigger-Start Events (WNF, ETW, Network State Changes)
-            SERVICE_TRIGGER_INFO triggerInfo = {0};
-            triggerInfo.cTriggers = 0; // Wipe array
-            ChangeServiceConfig2W(hSvc.get(), SERVICE_CONFIG_TRIGGER_INFO, &triggerInfo);
-
-            // 2. Stop and Disable
+            // Only change the running/start state currently represented by the
+            // service snapshot. Recovery actions and trigger definitions are
+            // intentionally preserved until they have a journaled snapshot.
             SERVICE_STATUS ss;
             ControlService(hSvc.get(), SERVICE_CONTROL_STOP, &ss);
             ChangeServiceConfigW(hSvc.get(), SERVICE_NO_CHANGE, SERVICE_DISABLED, SERVICE_NO_CHANGE, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
             
-            log.Log(Core::LogLevel::INFO, "SVC", 200, "Neutralized service & disabled recovery: " + Core::Utils::ws2s(name));
+            log.Log(Core::LogLevel::INFO, "SVC", 200, "Neutralized service and preserved recovery configuration: " + Core::Utils::ws2s(name));
         }
 
         void EnforcePolicy(bool dryRun) {
