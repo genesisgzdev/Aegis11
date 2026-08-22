@@ -38,7 +38,7 @@ namespace Aegis::Modules {
                     Core::TaskState state{key, enabled == VARIANT_TRUE, true, ""};
                     BSTR xml = nullptr;
                     if (SUCCEEDED(task->get_Xml(&xml)) && xml != nullptr) {
-                        state.xml.assign(xml, SysStringLen(xml));
+                        state.xml = Core::Utils::ws2s(std::wstring(xml, SysStringLen(xml)));
                         SysFreeString(xml);
                     }
                     snapshot.tasks[key] = std::move(state);
