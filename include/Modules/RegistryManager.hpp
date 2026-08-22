@@ -139,7 +139,7 @@ namespace Aegis::Modules {
         }
 
         void EnforcePolicies(bool dryRun) {
-            log.Log(Core::LogLevel::L_INFO, "INFO", "Enforcing Privacy GPOs...");
+            log.Log(Core::LogLevel::INFO, "INFO", "Enforcing Privacy GPOs...");
             auto apply = [&](HKEY r, const std::wstring& p, const std::wstring& k, DWORD tv) {
                 HKEY raw_hk = nullptr;
                 REGSAM access = KEY_WRITE | KEY_READ | KEY_WOW64_64KEY;
@@ -154,7 +154,7 @@ namespace Aegis::Modules {
                         // Lock the key so Windows Update cannot overwrite it
                         LockRegistryKey(r, p);
                     } else {
-                        log.Log(Core::LogLevel::L_INFO, "DRY-RUN", "Would set and LOCK policy: " + std::string(k.begin(), k.end()));
+                        log.Log(Core::LogLevel::INFO, "DRY-RUN", "Would set and LOCK policy: " + std::string(k.begin(), k.end()));
                     }
                 }
             };
@@ -169,7 +169,7 @@ namespace Aegis::Modules {
             apply(HKEY_LOCAL_MACHINE, _X("SOFTWARE\\Policies\\Microsoft\\Windows\\System"), _X("EnableActivityFeed"), 0);
             apply(HKEY_CURRENT_USER, _X("Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo"), _X("Enabled"), 0);
             
-            if (!dryRun) log.Log(Core::LogLevel::L_INFO, "DONE", "Registry policies enforced and locked via Kernel DACLs.");
+            if (!dryRun) log.Log(Core::LogLevel::INFO, "DONE", "Registry policies enforced and locked via Kernel DACLs.");
         }
     };
 }

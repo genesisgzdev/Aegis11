@@ -17,7 +17,7 @@ namespace Aegis::Modules {
         explicit NetworkSinkhole(Core::Logger& logger) : log(logger) {}
 
         void Apply(bool dryRun) {
-            log.Log(Core::LogLevel::L_INFO, "INFO", "Applying DNS sinkhole to hosts file...");
+            log.Log(Core::LogLevel::INFO, "INFO", "Applying DNS sinkhole to hosts file...");
             wchar_t windir[MAX_PATH];
             ExpandEnvironmentStringsW(_X("%WINDIR%").c_str(), windir, MAX_PATH);
             std::filesystem::path hostsPath = std::filesystem::path(windir) / _X("System32") / _X("drivers") / _X("etc") / _X("hosts");
@@ -25,7 +25,7 @@ namespace Aegis::Modules {
             std::filesystem::path backupPath = std::filesystem::path(windir) / _X("System32") / _X("drivers") / _X("etc") / _X("hosts.aegis.bak");
             
             if (dryRun) {
-                log.Log(Core::LogLevel::L_INFO, "DRY-RUN", "Would inject telemetry null routes into " + hostsPath.string());
+                log.Log(Core::LogLevel::INFO, "DRY-RUN", "Would inject telemetry null routes into " + hostsPath.string());
                 return;
             }
 
@@ -35,7 +35,7 @@ namespace Aegis::Modules {
             std::ofstream out(tempPath, std::ios::trunc);
             
             if (!in || !out) { 
-                log.Log(Core::LogLevel::L_ERR, "ERROR", "File I/O error. Hosts might be locked by AV."); 
+                log.Log(Core::LogLevel::ERR, "ERROR", "File I/O error. Hosts might be locked by AV.");
                 return; 
             }
 
@@ -58,15 +58,15 @@ namespace Aegis::Modules {
             in.close(); out.close();
 
             if (ReplaceFileW(hostsPath.c_str(), tempPath.c_str(), backupPath.c_str(), REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr, nullptr)) {
-                log.Log(Core::LogLevel::L_INFO, "DONE", std::to_string(added) + " routes injected securely via ReplaceFileW.");
+            log.Log(Core::LogLevel::INFO, "DONE", std::to_string(added) + " routes injected securely via ReplaceFileW.");
                 HMODULE hDns = LoadLibraryW(_X("dnsapi.dll").c_str());
                 if (hDns) {
                     auto pDnsFlush = (DnsFlushResolverCacheFunc)GetProcAddress(hDns, "DnsFlushResolverCache");
-                    if (pDnsFlush && pDnsFlush()) log.Log(Core::LogLevel::L_INFO, "INFO", "Native DnsFlushResolverCache executed.");
+                    if (pDnsFlush && pDnsFlush()) log.Log(Core::LogLevel::INFO, "INFO", "Native DnsFlushResolverCache executed.");
                     FreeLibrary(hDns);
                 }
             } else {
-                log.Log(Core::LogLevel::L_ERR, "ERROR", "ReplaceFileW failed: " + log.GetLastErrorString());
+                    log.Log(Core::LogLevel::ERR, "ERROR", "ReplaceFileW failed: " + log.GetLastErrorString());
             }
             std::filesystem::remove(tempPath);
         }
