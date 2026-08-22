@@ -47,29 +47,11 @@ int main(int argc, char* argv[]) {
     }
 
     Logger log;
-    PolicyEngine engine(log);
-    AppxManager am(log);
     TaskManager tm(log);
     RegistryManager rm(log);
-    NetworkWfp nw(log);
     ServiceManager sm(log);
-    FirewallManager fm(log);
-    DataPurge dp(log);
-    NetworkOptimizer no(log, engine);
-    Reinforcement rf(log);
 
     // CLI Parameter Handling
-    const bool reconcile = std::find_if(argv + 1, argv + argc, [](const char* arg) {
-        return std::string(arg) == "--reconcile";
-    }) != argv + argc;
-    if (reconcile) {
-        log.SetTraceId("RECONCILE");
-        log.Log(LogLevel::INFO, "SYS", 100, "Automated Reconciliation Triggered.");
-        engine.LoadAndRecover();
-        sm.EnforcePolicy(false);
-        tm.DisableTelemetryTasks();
-        return 0;
-    }
     if (runConfig.simulate) {
         sm.EnforcePolicy(true);
         return 0;
@@ -88,6 +70,23 @@ int main(int argc, char* argv[]) {
         return 3;
     }
 
+    PolicyEngine engine(log);
+    AppxManager am(log);
+    NetworkWfp nw(log);
+    FirewallManager fm(log);
+    DataPurge dp(log);
+    NetworkOptimizer no(log, engine);
+
+    if (runConfig.reconcile) {
+        log.SetTraceId("RECONCILE");
+        log.Log(LogLevel::INFO, "SYS", 100, "Automated Reconciliation Triggered.");
+        engine.LoadAndRecover();
+        sm.EnforcePolicy(false);
+        tm.DisableTelemetryTasks();
+        return 0;
+    }
+
+    Reinforcement rf(log);
     InteractiveShell shell(log, engine, am, tm, nw, sm, fm, dp, no);
     
     // Register Reinforcement Task on every interactive run to ensure persistence
