@@ -7,7 +7,7 @@
 
 Aegis11 es un controlador de políticas para Windows. Su objetivo es aplicar una configuración deseada, registrar los cambios y volver a comprobar el estado cuando el sistema se desvía de esa configuración.
 
-En 30 segundos: `--simulate` muestra el plan de servicios, `--apply` aplica esa ruta fija y `--reconcile` recupera el WAL y vuelve a comprobar servicios y tareas. Sin argumentos abre el modo interactivo, que expone más módulos. Es una base de control de estado, no un antivirus ni un EDR certificado.
+En 30 segundos: `--simulate` muestra el plan de servicios, `--apply` aplica esa ruta fija y `--reconcile` recupera el WAL y vuelve a comprobar servicios y tareas. `--snapshot` captura el estado que los módulos soportan sin cargar la ruta de recuperación; los modos son mutuamente excluyentes. Sin argumentos abre el modo interactivo, que expone más módulos. Es una base de control de estado, no un antivirus ni un EDR certificado.
 
 El proyecto trabaja sobre componentes sensibles de Windows como registro, servicios, tareas programadas y Windows Filtering Platform. Por eso el README separa lo que compila de lo que todavía necesita pruebas nativas en una máquina Windows aislada.
 
@@ -21,6 +21,7 @@ El proyecto trabaja sobre componentes sensibles de Windows como registro, servic
 - `--simulate` solo muestra el plan de servicios y no simula todos los módulos interactivos.
 - La ejecución con privilegios, los cambios de red y la reconciliación sobre un sistema real necesitan validación específica en Windows.
 - `--snapshot <file.json>` escribe un baseline de los servicios, tareas y claves de registro que los módulos saben capturar. `--restore` sigue rechazado porque todavía no existe una restauración con paridad de estado.
+- El parser rechaza combinaciones de modos como `--snapshot --apply` en vez de dejar que el orden interno decida qué operación se ejecuta.
 
 Esto no es un antivirus ni un EDR terminado. Es una base de ingeniería para control de estado y mitigación en Windows.
 

@@ -7,6 +7,7 @@ namespace Aegis::CLI {
     struct RunConfig {
         bool simulate = false;
         bool apply = false;
+        bool reconcile = false;
         bool interactive = false;
         std::string snapshot_file = "";
         std::string restore_file = "";
@@ -34,8 +35,18 @@ namespace Aegis::CLI {
                 else if (arg == "--restore" && i + 1 < argc) config.restore_file = argv[++i];
                 else if (arg == "--snapshot" || arg == "--restore") config.invalid = true;
                 else if (arg == "--interactive") config.interactive = true;
-                else if (arg != "--reconcile" && arg != "--dry-run") config.invalid = true;
+                else if (arg == "--reconcile") config.reconcile = true;
+                else config.invalid = true;
             }
+
+            const int selectedModes =
+                static_cast<int>(config.simulate) +
+                static_cast<int>(config.apply) +
+                static_cast<int>(config.reconcile) +
+                static_cast<int>(config.interactive) +
+                static_cast<int>(!config.snapshot_file.empty()) +
+                static_cast<int>(!config.restore_file.empty());
+            if (selectedModes > 1) config.invalid = true;
             return config;
         }
 

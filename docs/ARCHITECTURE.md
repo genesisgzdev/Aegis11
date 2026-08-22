@@ -18,6 +18,7 @@ flowchart TD
     REC --> S[ServiceManager apply]
     REC --> T[TaskManager disable two known tasks]
     P -->|no args or --interactive| UI[InteractiveShell]
+    P -->|--snapshot| SNAP[StateController read supported state]
     UI --> L[Light registry writes]
     UI --> B[Balanced registry services tasks and apps]
     UI --> A[Aggressive WFP firewall apps purge and network]
@@ -25,6 +26,8 @@ flowchart TD
 ~~~
 
 `--snapshot <file.json>` conecta `main.cpp` con `StateController` y escribe el baseline de los servicios, tareas y valores de registro que tienen captura implementada. `--restore` sigue rechazado con exit code 3; el archivo no se presenta como mecanismo de rollback.
+
+El parser acepta un solo modo operativo por invocación. La ruta de snapshot, simulate y apply se resuelve antes de construir `PolicyEngine`, porque su constructor carga el WAL y puede iniciar recuperación; una captura no debe entrar en esa ruta como efecto lateral.
 
 ## 2. Transacción de política de registro
 
