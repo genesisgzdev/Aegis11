@@ -20,7 +20,7 @@ El proyecto trabaja sobre componentes sensibles de Windows como registro, servic
 - `--reconcile` recupera el WAL y vuelve a aplicar las comprobaciones de servicios y tareas que hoy implementa el código.
 - `--simulate` solo muestra el plan de servicios y no simula todos los módulos interactivos.
 - La ejecución con privilegios, los cambios de red y la reconciliación sobre un sistema real necesitan validación específica en Windows.
-- `--snapshot <file.json>` escribe un baseline de los servicios, tareas y claves de registro que los módulos saben capturar. `--restore` sigue rechazado porque todavía no existe una restauración con paridad de estado.
+- `--snapshot <file.json>` escribe un baseline versionado (`aegis11.system-snapshot`, esquema 1) de los servicios, tareas y claves de registro que los módulos saben capturar. `--restore` sigue rechazado porque todavía no existe una restauración con paridad de estado.
 - El parser rechaza combinaciones de modos como `--snapshot --apply` en vez de dejar que el orden interno decida qué operación se ejecuta.
 
 Esto no es un antivirus ni un EDR terminado. Es una base de ingeniería para control de estado y mitigación en Windows.
@@ -82,7 +82,7 @@ Aegis11 puede afectar conectividad, servicios, tareas y políticas del registro.
 
 La compilación y `tests/compile_checks.py` cubren el código y el build. Las pruebas en VM Windows cubren cambios reales de registro, servicios, tareas, WFP, firewall o Appx. La recuperación necesita una prueba propia del cambio y de su reversión.
 
-El snapshot es una captura de estado, no un rollback. Restore sigue rechazado hasta que pueda restaurar servicios, tareas, ACL, triggers y valores de registro con la misma fidelidad.
+El snapshot es una captura de estado, no un rollback. Incluye un identificador de formato y versión de esquema para que una futura restauración pueda rechazar archivos incompatibles antes de tocar Windows. Restore sigue rechazado hasta que pueda restaurar servicios, tareas, ACL, triggers y valores de registro con la misma fidelidad.
 
 El flujo exacto por modo está en [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

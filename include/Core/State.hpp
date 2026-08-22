@@ -3,6 +3,7 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <cstdint>
 #include "../Support/json.hpp"
 
 namespace Aegis::Core {
@@ -29,11 +30,14 @@ namespace Aegis::Core {
     };
 
     struct SystemSnapshot {
+        static constexpr std::uint32_t CurrentSchemaVersion = 1;
+        std::string format = "aegis11.system-snapshot";
+        std::uint32_t schemaVersion = CurrentSchemaVersion;
         std::string timestamp;
         std::string osVersion;
         std::map<std::string, ServiceState> services;
         std::map<std::string, RegistryState> registry;
         std::map<std::string, TaskState> tasks;
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(SystemSnapshot, timestamp, osVersion, services, registry, tasks)
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(SystemSnapshot, format, schemaVersion, timestamp, osVersion, services, registry, tasks)
     };
 }

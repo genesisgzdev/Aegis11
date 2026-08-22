@@ -23,6 +23,8 @@ namespace Aegis::Engine {
         void CreateBaseline(const std::string& filepath) {
             log.Log(Core::LogLevel::INFO, "STATE", "Creating global system baseline snapshot...");
             Core::SystemSnapshot snap;
+            snap.format = "aegis11.system-snapshot";
+            snap.schemaVersion = Core::SystemSnapshot::CurrentSchemaVersion;
             
             auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
             std::tm tm_now; gmtime_s(&tm_now, &now);

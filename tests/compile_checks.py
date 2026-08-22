@@ -25,6 +25,8 @@ require("include/Core/PolicyEngine.hpp", 'Unable to persist the failed commit re
 require("include/Core/PolicyEngine.hpp", 'const LONG result = RegDeleteTreeW(root, path.c_str());')
 require("include/Core/StateEngine.hpp", 'SysInfo::GetCapabilities')
 require("include/Core/StateEngine.hpp", 'MOVEFILE_WRITE_THROUGH')
+require("include/Core/State.hpp", 'CurrentSchemaVersion = 1')
+require("include/Core/StateEngine.hpp", 'snap.schemaVersion = Core::SystemSnapshot::CurrentSchemaVersion')
 if 'Windows 11 (Dynamic)' in (ROOT / "include/Core/StateEngine.hpp").read_text(encoding="utf-8-sig"):
     raise AssertionError("snapshot must not contain a hardcoded operating-system version")
 
