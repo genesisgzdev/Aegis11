@@ -21,6 +21,8 @@ static const GUID AEGIS_FWPM_CONDITION_IP_PROTOCOL = { 0x1aa0fae1, 0x86bd, 0x44a
 // runs, otherwise cleanup cannot find rules created by an earlier run.
 static const GUID AEGIS_PROVIDER_GUID = { 0xae713b42, 0x4413, 0x4da6, { 0xb8, 0xb7, 0x33, 0x46, 0xdd, 0x42, 0x2a, 0x12 } };
 static const GUID AEGIS_SUBLAYER_GUID = { 0xd8ee0423, 0xd1a3, 0x4536, { 0xbf, 0x3c, 0x8b, 0x1f, 0x09, 0xf5, 0x25, 0x3f } };
+// Kept only so an upgrade can remove rules created by the pre-release build.
+static const GUID AEGIS_LEGACY_PROVIDER_GUID = { 0x1a2b3c4d, 0x5e6f, 0x7a8b, { 0x9c, 0x0d, 0x1e, 0x2f, 0x3a, 0x4b, 0x5c, 0x6d } };
 
 #ifndef FWPM_FILTER_FLAG_PERSISTENT
 #define FWPM_FILTER_FLAG_PERSISTENT (0x00000001)
@@ -31,14 +33,19 @@ namespace Aegis::Modules {
         Core::Logger& log;
 
         bool CleanupOrphanedRules(HANDLE engine) {
-            DWORD status = FwpmProviderDeleteByKey0(engine, &AEGIS_PROVIDER_GUID);
-            if (status == ERROR_SUCCESS) {
-                log.Log(Core::LogLevel::INFO, "WFP", 200, "Cleaned up orphaned Aegis WFP rules based on Version-tagged Provider.");
-                return true;
+            bool cleaned = false;
+            for (const GUID* providerKey : { &AEGIS_PROVIDER_GUID, &AEGIS_LEGACY_PROVIDER_GUID }) {
+                const DWORD status = FwpmProviderDeleteByKey0(engine, providerKey);
+                if (status == ERROR_SUCCESS) {
+                    cleaned = true;
+                    continue;
+                }
+                if (status == FWP_E_PROVIDER_NOT_FOUND) continue;
+                log.Log(Core::LogLevel::ERR, "WFP", 503, "Failed to clean up existing WFP provider: " + std::to_string(status));
+                return false;
             }
-            if (status == FWP_E_PROVIDER_NOT_FOUND) return true;
-            log.Log(Core::LogLevel::ERR, "WFP", 503, "Failed to clean up existing WFP provider: " + std::to_string(status));
-            return false;
+            if (cleaned) log.Log(Core::LogLevel::INFO, "WFP", 200, "Cleaned up current and legacy Aegis WFP providers.");
+            return true;
         }
 
         bool VerifyProvider(HANDLE engine) {
