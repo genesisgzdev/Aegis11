@@ -299,7 +299,8 @@ namespace Aegis::Core {
                     tx.originalData.resize(size);
                     RegQueryValueExW(hKey, def.key.c_str(), nullptr, &type, tx.originalData.data(), &size);
                     
-                    if (def.targetData.size() == size && memcmp(def.targetData.data(), tx.originalData.data(), size) == 0) {
+                    if (type == tx.targetType && def.targetData.size() == size &&
+                        memcmp(def.targetData.data(), tx.originalData.data(), size) == 0) {
                         RegCloseKey(hKey);
                         return true; 
                     }
