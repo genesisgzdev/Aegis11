@@ -26,7 +26,9 @@ using json = nlohmann::json;
 
 namespace Aegis::Core {
     enum class RegType { DWORD, QWORD, SZ, EXPAND_SZ, MULTI_SZ, BINARY };
-    enum class TxState { PENDING, PARTIAL_APPLY, COMMITTED, FAILED, ROLLED_BACK, RECOVERY_APPLIED };
+    // Keep existing numeric values stable; CONFLICT is appended for WAL
+    // records written after external state drift is detected.
+    enum class TxState { PENDING, PARTIAL_APPLY, COMMITTED, FAILED, ROLLED_BACK, RECOVERY_APPLIED, CONFLICT };
 
     struct PolicyDefinition {
         std::wstring name;
@@ -54,6 +56,7 @@ namespace Aegis::Core {
         bool valueExistedBefore;
         uint32_t originalType;
         std::vector<BYTE> originalData;
+        uint32_t targetType;
         std::vector<BYTE> targetData;
 
         json to_json() const {
@@ -62,7 +65,7 @@ namespace Aegis::Core {
                 {"eng_v", engine_version}, {"pol_v", policy_version}, {"rootHive", rootHive}, 
                 {"path", path}, {"key", key}, {"state", static_cast<int>(state)}, {"keyExistedBefore", keyExistedBefore},
                 {"valueExistedBefore", valueExistedBefore}, {"originalType", originalType},
-                {"originalData", originalData}, {"targetData", targetData}
+                {"originalData", originalData}, {"targetType", targetType}, {"targetData", targetData}
             };
         }
 
@@ -79,6 +82,7 @@ namespace Aegis::Core {
             tx.valueExistedBefore = j.value("valueExistedBefore", false);
             tx.originalType = j.value("originalType", 0U);
             tx.originalData = j.value("originalData", std::vector<BYTE>());
+            tx.targetType = j.value("targetType", 0U);
             tx.targetData = j.value("targetData", std::vector<BYTE>());
             return tx;
         }
@@ -202,8 +206,14 @@ namespace Aegis::Core {
             for (auto& tx : journal) {
                 if (tx.state == TxState::PENDING || tx.state == TxState::PARTIAL_APPLY) {
                     log.Log(LogLevel::WARN, "WAL", 301, "Recovery: Reverting incomplete transaction " + tx.name);
-                    const bool recovered = RollbackRecord(tx);
-                    tx.state = recovered ? TxState::RECOVERY_APPLIED : TxState::FAILED;
+                    bool conflict = false;
+                    const bool recovered = RollbackRecord(tx, &conflict);
+                    if (conflict) {
+                        tx.state = TxState::CONFLICT;
+                        log.Log(LogLevel::ERR, "WAL", 307, "Recovery conflict: external state changed " + tx.name);
+                    } else {
+                        tx.state = recovered ? TxState::RECOVERY_APPLIED : TxState::FAILED;
+                    }
                     if (!AtomicAppendJournal(tx)) {
                         log.Log(LogLevel::ERR, "WAL", 305, "Unable to persist recovery result for transaction " + tx.name);
                     }
@@ -211,27 +221,71 @@ namespace Aegis::Core {
             }
         }
 
-        bool RollbackRecord(const TransactionRecord& tx) {
+        bool RollbackRecord(const TransactionRecord& tx, bool* conflictDetected = nullptr) {
+            if (conflictDetected) *conflictDetected = false;
             HKEY root = (HKEY)tx.rootHive;
             std::wstring path = Utils::s2ws(tx.path);
             std::wstring key = Utils::s2ws(tx.key);
-            if (!tx.keyExistedBefore) {
-                const LONG result = RegDeleteTreeW(root, path.c_str());
-                return result == ERROR_SUCCESS || result == ERROR_FILE_NOT_FOUND;
-            } else {
-                HKEY hKey;
-                if (RegOpenKeyExW(root, path.c_str(), 0, KEY_WRITE | KEY_WOW64_64KEY, &hKey) == ERROR_SUCCESS) {
-                    LONG result = ERROR_SUCCESS;
-                    if (tx.valueExistedBefore) {
-                        result = RegSetValueExW(hKey, key.c_str(), 0, tx.originalType, tx.originalData.data(), (DWORD)tx.originalData.size());
-                    } else {
-                        result = RegDeleteValueW(hKey, key.c_str());
-                    }
+            HKEY hKey = nullptr;
+            const LONG openResult = RegOpenKeyExW(root, path.c_str(), 0,
+                KEY_QUERY_VALUE | KEY_SET_VALUE | KEY_WOW64_64KEY, &hKey);
+            if (openResult == ERROR_FILE_NOT_FOUND) return !tx.keyExistedBefore;
+            if (openResult != ERROR_SUCCESS) return false;
+
+            DWORD currentType = 0;
+            DWORD currentSize = 0;
+            LONG readResult = RegQueryValueExW(hKey, key.c_str(), nullptr, &currentType, nullptr, &currentSize);
+            std::vector<BYTE> currentData;
+            if (readResult == ERROR_SUCCESS) {
+                currentData.resize(currentSize);
+                DWORD readSize = currentSize;
+                readResult = RegQueryValueExW(hKey, key.c_str(), nullptr, &currentType,
+                    currentData.empty() ? nullptr : currentData.data(), &readSize);
+                if (readResult == ERROR_SUCCESS) currentData.resize(readSize);
+            }
+
+            const auto matches = [](DWORD type, const std::vector<BYTE>& actual,
+                                    DWORD expectedType, const std::vector<BYTE>& expected) {
+                // targetType was added after the first WAL format. Legacy
+                // records still get byte-level conflict protection; current
+                // records additionally bind the value type.
+                return (expectedType == 0 || type == expectedType) && actual == expected;
+            };
+            const bool alreadyRestored = tx.valueExistedBefore
+                ? matches(currentType, currentData, tx.originalType, tx.originalData)
+                : readResult == ERROR_FILE_NOT_FOUND;
+            if (alreadyRestored) {
+                RegCloseKey(hKey);
+                return true;
+            }
+
+            // Never overwrite a value changed by another actor after Aegis
+            // applied the policy. Legacy records have no target type, so the
+            // byte comparison above is the compatibility fallback.
+            if (readResult != ERROR_SUCCESS || !matches(currentType, currentData, tx.targetType, tx.targetData)) {
+                if (conflictDetected) *conflictDetected = true;
+                RegCloseKey(hKey);
+                return false;
+            }
+
+            LONG result = tx.valueExistedBefore
+                ? RegSetValueExW(hKey, key.c_str(), 0, tx.originalType,
+                    tx.originalData.empty() ? nullptr : tx.originalData.data(), (DWORD)tx.originalData.size())
+                : RegDeleteValueW(hKey, key.c_str());
+
+            if (result == ERROR_SUCCESS && !tx.keyExistedBefore) {
+                DWORD subKeyCount = 0;
+                DWORD valueCount = 0;
+                if (RegQueryInfoKeyW(hKey, nullptr, nullptr, nullptr, &subKeyCount, nullptr, nullptr,
+                    &valueCount, nullptr, nullptr, nullptr, nullptr) == ERROR_SUCCESS &&
+                    subKeyCount == 0 && valueCount == 0) {
                     RegCloseKey(hKey);
-                    return result == ERROR_SUCCESS || result == ERROR_FILE_NOT_FOUND;
+                    const LONG deleteKeyResult = RegDeleteTreeW(root, path.c_str());
+                    return deleteKeyResult == ERROR_SUCCESS || deleteKeyResult == ERROR_FILE_NOT_FOUND;
                 }
             }
-            return false;
+            RegCloseKey(hKey);
+            return result == ERROR_SUCCESS || (result == ERROR_FILE_NOT_FOUND && !tx.valueExistedBefore);
         }
 
         bool ApplyPolicy(PolicyDefinition def) {
@@ -252,6 +306,14 @@ namespace Aegis::Core {
             tx.key_fingerprint = Utils::FNV1a64(tx.path + "\\" + tx.key);
             tx.state = TxState::PENDING;
             tx.targetData = def.targetData;
+            switch (def.type) {
+                case RegType::DWORD: tx.targetType = REG_DWORD; break;
+                case RegType::QWORD: tx.targetType = REG_QWORD; break;
+                case RegType::SZ: tx.targetType = REG_SZ; break;
+                case RegType::EXPAND_SZ: tx.targetType = REG_EXPAND_SZ; break;
+                case RegType::MULTI_SZ: tx.targetType = REG_MULTI_SZ; break;
+                case RegType::BINARY: tx.targetType = REG_BINARY; break;
+            }
 
             HKEY hKey;
             if (RegOpenKeyExW(def.rootHive, def.path.c_str(), 0, KEY_READ | KEY_WOW64_64KEY, &hKey) == ERROR_SUCCESS) {
@@ -279,16 +341,8 @@ namespace Aegis::Core {
             }
 
             if (RegCreateKeyExW(def.rootHive, def.path.c_str(), 0, nullptr, 0, KEY_WRITE | KEY_WOW64_64KEY, nullptr, &hKey, nullptr) == ERROR_SUCCESS) {
-                DWORD winType = REG_BINARY;
-                switch (def.type) {
-                    case RegType::DWORD: winType = REG_DWORD; break;
-                    case RegType::QWORD: winType = REG_QWORD; break;
-                    case RegType::SZ: winType = REG_SZ; break;
-                    case RegType::EXPAND_SZ: winType = REG_EXPAND_SZ; break;
-                    case RegType::MULTI_SZ: winType = REG_MULTI_SZ; break;
-                    case RegType::BINARY: winType = REG_BINARY; break;
-                }
-                if (RegSetValueExW(hKey, def.key.c_str(), 0, winType, def.targetData.data(), (DWORD)def.targetData.size()) == ERROR_SUCCESS) {
+                if (RegSetValueExW(hKey, def.key.c_str(), 0, tx.targetType,
+                    def.targetData.empty() ? nullptr : def.targetData.data(), (DWORD)def.targetData.size()) == ERROR_SUCCESS) {
                     RegCloseKey(hKey);
                     journal.back().state = TxState::COMMITTED;
                     if (AtomicAppendJournal(journal.back())) return true;

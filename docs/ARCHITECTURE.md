@@ -56,7 +56,7 @@ sequenceDiagram
     end
 ~~~
 
-El WAL usa entradas alineadas a 4096 bytes, FNV-1a sobre el payload, marcador final `0xAA` y `FlushFileBuffers`. Eso describe integridad de escritura; no equivale a snapshot completo ni rollback de todos los módulos.
+El WAL usa entradas alineadas a 4096 bytes, FNV-1a sobre el payload, marcador final `0xAA` y `FlushFileBuffers`. Cada registro también conserva el tipo Win32 de la mutación objetivo. Durante rollback se compara el estado actual con los bytes escritos por Aegis: un drift externo no se pisa silenciosamente, y un estado que ya coincide con el original se trata como recuperación idempotente. Eso describe integridad de escritura y una frontera de conflicto; no equivale a snapshot completo ni rollback de todos los módulos.
 
 ## 3. Recuperación y persistencia
 
@@ -67,8 +67,10 @@ stateDiagram-v2
     PENDING --> RECOVERY_APPLIED: startup rollback and durable marker
     PARTIAL_APPLY --> RECOVERY_APPLIED: startup rollback and durable marker
     PENDING --> FAILED: rollback error and durable failure marker
+    PENDING --> CONFLICT: external state drift detected
     COMMITTED --> ROLLED_BACK: interactive R
     FAILED --> [*]
+    CONFLICT --> [*]
     RECOVERY_APPLIED --> [*]
 ~~~
 

@@ -51,7 +51,7 @@ flowchart LR
 
 La vista separa las rutas que realmente existen. Los nombres de módulos no son evidencia de que cada capacidad esté validada en runtime.
 
-El WAL usa entradas JSONL con longitud explícita, payload, checksum FNV-1a y marcador final. El lector valida la longitud antes de extraer el checksum, y el recovery guarda una nueva transición después de intentar el rollback. Eso detecta framing roto y hace visible un rollback fallido; no equivale a snapshot completo ni a rollback de todos los módulos.
+El WAL usa entradas JSONL con longitud explícita, payload, checksum FNV-1a y marcador final. Cada transacción conserva el tipo y los bytes que Aegis escribió; durante recovery, si el valor actual ya volvió al original se considera idempotente, y si otro actor lo cambió se registra un conflicto en vez de sobrescribirlo. El lector valida la longitud antes de extraer el checksum y el recovery guarda una nueva transición después de intentar el rollback. Eso detecta framing roto y hace visible un rollback fallido; no equivale a snapshot completo ni a rollback de todos los módulos.
 
 Los tipos `REG_DWORD`, `REG_QWORD`, `REG_SZ`, `REG_EXPAND_SZ`, `REG_MULTI_SZ` y `REG_BINARY` se escriben con su tipo Win32 correspondiente. La vista WOW64 y la ejecución privilegiada siguen necesitando pruebas nativas.
 
