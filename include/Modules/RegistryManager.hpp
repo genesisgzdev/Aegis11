@@ -6,6 +6,7 @@
 #include <windows.h>
 #include <string>
 #include <map>
+#include <utility>
 
 #pragma comment(lib, "advapi32.lib")
 
@@ -18,15 +19,28 @@ namespace Aegis::Modules {
 
         void Snapshot(Core::SystemSnapshot& snapshot) {
             auto read_val = [&](HKEY root, const std::wstring& path, const std::wstring& key, const std::string& snapshot_id) {
+                Core::RegistryState rs;
+                rs.fullPath = snapshot_id;
+                rs.exists = false;
+                rs.type = REG_NONE;
+                rs.view = "64-bit";
                 HKEY raw_hk = nullptr;
                 if (RegOpenKeyExW(root, path.c_str(), 0, KEY_READ | KEY_WOW64_64KEY, &raw_hk) == ERROR_SUCCESS) {
                     Core::RegHandle hk = Core::RegHandle::From(raw_hk);
-                    DWORD rv = 0, sz = sizeof(rv), type = 0;
-                    if (RegQueryValueExW(hk.get(), key.c_str(), nullptr, &type, (LPBYTE)&rv, &sz) == ERROR_SUCCESS) {
-                        Core::RegistryState rs; rs.fullPath = snapshot_id; rs.value = rv; rs.exists = true;
-                        snapshot.registry[snapshot_id] = rs;
+                    DWORD type = REG_NONE, size = 0;
+                    if (RegQueryValueExW(hk.get(), key.c_str(), nullptr, &type, nullptr, &size) == ERROR_SUCCESS) {
+                        rs.type = type;
+                        rs.data.resize(size);
+                        if (RegQueryValueExW(hk.get(), key.c_str(), nullptr, &type,
+                                rs.data.empty() ? nullptr : rs.data.data(), &size) == ERROR_SUCCESS) {
+                            rs.data.resize(size);
+                            rs.exists = true;
+                        } else {
+                            rs.data.clear();
+                        }
                     }
                 }
+                snapshot.registry[snapshot_id] = std::move(rs);
             };
             read_val(HKEY_LOCAL_MACHINE, _X("SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection"), _X("AllowTelemetry"), "HKLM_AllowTelemetry");
         }

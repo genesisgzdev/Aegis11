@@ -52,3 +52,4 @@
 ## [0.1.0] - 2026-08-20
 
 - Initial public Windows policy-engine baseline.
+- El snapshot ahora conserva el tipo y los bytes exactos del valor de registro, la vista de Windows, la configuración básica y dependencias del servicio y el XML de las tareas capturadas. El esquema queda versionado; esto prepara el contrato de restore sin presentarlo como implementado.

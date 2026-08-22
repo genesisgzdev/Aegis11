@@ -24,7 +24,7 @@ El proyecto trabaja sobre componentes sensibles de Windows como registro, servic
 - Si las reversiones terminan pero el archivo WAL no puede borrarse, la operación también se considera incompleta.
 - `--simulate` solo muestra el plan de servicios y no simula todos los módulos interactivos.
 - La ejecución con privilegios, los cambios de red y la reconciliación sobre un sistema real necesitan validación específica en Windows.
-- `--snapshot <file.json>` escribe un baseline de los servicios, tareas y claves de registro que los módulos saben capturar. `--restore` sigue rechazado porque todavía no existe una restauración con paridad de estado.
+- `--snapshot <file.json>` escribe un baseline versionado. Conserva bytes y tipo del registro, vista de Windows, configuración básica y dependencias del servicio y XML de tareas cuando están disponibles. `--restore` sigue rechazado porque todavía no existe una restauración con paridad de estado.
 - El parser rechaza combinaciones de modos como `--snapshot --apply` en vez de dejar que el orden interno decida qué operación se ejecuta.
 
 Esto no es un antivirus ni un EDR terminado. Es una base de ingeniería para control de estado y mitigación en Windows.

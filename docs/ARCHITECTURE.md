@@ -23,11 +23,13 @@ flowchart TD
     UI --> A["Aggressive rejected: non-journaled or irreversible operations"]
 ```
 
-`--snapshot <file.json>` conecta `main.cpp` con `StateController` y escribe el baseline de los servicios, tareas y valores de registro que tienen captura implementada. `--restore` sigue rechazado con exit code 3; el archivo no se presenta como mecanismo de rollback.
+`--snapshot <file.json>` conecta `main.cpp` con `StateController` y escribe el baseline de los servicios, tareas y valores de registro que tienen captura implementada. El esquema versionado conserva tipo y bytes de registro, vista de Windows, configuración básica del servicio, dependencias y XML de la tarea cuando el sistema los devuelve. `--restore` sigue rechazado con exit code 3; el archivo no se presenta como mecanismo de rollback.
 
 El parser acepta un solo modo operativo por invocación. La ruta de snapshot, simulate y apply se resuelve antes de construir `PolicyEngine`, porque su constructor carga el WAL y puede iniciar recuperación; una captura no debe entrar en esa ruta como efecto lateral.
 
 El snapshot toma la versión y build mediante `SysInfo::GetCapabilities` y serializa primero un archivo temporal. `MoveFileExW` lo reemplaza con `MOVEFILE_WRITE_THROUGH`; si la serialización o el reemplazo falla, se elimina el temporal y no se presenta un baseline parcial como válido.
+
+El esquema no afirma que todos los módulos estén cubiertos: una entrada puede marcar `exists: false`, y un módulo puede no producir entradas si Windows no permite consultarlo. La captura es evidencia para diseñar el contrato de restore, no autorización para mutar ni garantía de que el estado pueda restaurarse todavía.
 
 ## 2. Transacción de política de registro
 

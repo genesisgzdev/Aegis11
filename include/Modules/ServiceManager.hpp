@@ -2,11 +2,13 @@
 #include "../Core/RAII.hpp"
 #include "../Core/Logger.hpp"
 #include "../Core/State.hpp"
+#include "../Core/Utils.hpp"
 #include <windows.h>
 #include <winsvc.h>
 #include <string>
 #include <vector>
 #include <set>
+#include <utility>
 
 namespace Aegis::Modules {
     class ScHandle {
@@ -43,7 +45,21 @@ namespace Aegis::Modules {
                 SERVICE_STATUS status{};
                 if (!QueryServiceStatus(service.get(), &status)) continue;
                 const std::string key = Core::Utils::ws2s(name);
-                snapshot.services[key] = Core::ServiceState{key, config->dwStartType, status.dwCurrentState};
+                Core::ServiceState state;
+                state.name = key;
+                state.serviceType = config->dwServiceType;
+                state.startType = config->dwStartType;
+                state.errorControl = config->dwErrorControl;
+                state.currentState = status.dwCurrentState;
+                state.binaryPath = config->lpBinaryPathName ? Core::Utils::ws2s(config->lpBinaryPathName) : "";
+                state.loadOrderGroup = config->lpLoadOrderGroup ? Core::Utils::ws2s(config->lpLoadOrderGroup) : "";
+                state.accountName = config->lpServiceStartName ? Core::Utils::ws2s(config->lpServiceStartName) : "";
+                if (config->lpDependencies) {
+                    for (const wchar_t* dependency = config->lpDependencies; *dependency; dependency += wcslen(dependency) + 1) {
+                        state.dependencies.push_back(Core::Utils::ws2s(dependency));
+                    }
+                }
+                snapshot.services[key] = std::move(state);
             }
         }
 

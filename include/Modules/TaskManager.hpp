@@ -35,7 +35,13 @@ namespace Aegis::Modules {
                 }
                 VARIANT_BOOL enabled = VARIANT_FALSE;
                 if (SUCCEEDED(task->get_Enabled(&enabled))) {
-                    snapshot.tasks[key] = Core::TaskState{key, enabled == VARIANT_TRUE, true};
+                    Core::TaskState state{key, enabled == VARIANT_TRUE, true, ""};
+                    BSTR xml = nullptr;
+                    if (SUCCEEDED(task->get_Xml(&xml)) && xml != nullptr) {
+                        state.xml.assign(xml, SysStringLen(xml));
+                        SysFreeString(xml);
+                    }
+                    snapshot.tasks[key] = std::move(state);
                 }
             }
         }
