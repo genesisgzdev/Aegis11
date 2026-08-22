@@ -13,7 +13,6 @@
 #include "../include/Modules/FirewallManager.hpp"
 #include "../include/Modules/DataPurge.hpp"
 #include "../include/Modules/NetworkOptimizer.hpp"
-#include "../include/Modules/Reinforcement.hpp"
 #include <iostream>
 #include <algorithm>
 #include <roapi.h>
@@ -81,18 +80,12 @@ int main(int argc, char* argv[]) {
         log.SetTraceId("RECONCILE");
         log.Log(LogLevel::INFO, "SYS", 100, "Automated Reconciliation Triggered.");
         // PolicyEngine already loads and recovers the durable journal in its
-        // constructor. Keep reconciliation single-entry so a recovery result
-        // is not replayed immediately by the same process.
-        sm.EnforcePolicy(false);
-        tm.DisableTelemetryTasks();
+        // constructor. Services and tasks are not changed here because their
+        // rollback-complete snapshots are not yet part of the WAL.
         return 0;
     }
 
-    Reinforcement rf(log);
     InteractiveShell shell(log, engine, am, tm, nw, sm, fm, dp, no);
-    
-    // Register Reinforcement Task on every interactive run to ensure persistence
-    rf.RegisterSelfHealingTask();
 
     shell.Run();
 

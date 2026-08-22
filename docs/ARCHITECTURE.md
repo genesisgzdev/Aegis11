@@ -15,14 +15,12 @@ flowchart TD
     P -->|--simulate| DRY[ServiceManager dry-run]
     P -->|--apply| APPLY[ServiceManager fixed service list]
     P -->|--reconcile| REC[PolicyEngine LoadAndRecover]
-    REC --> S[ServiceManager apply]
-    REC --> T[TaskManager disable two known tasks]
+    REC --> SAFE[No unjournaled mutation]
     P -->|no args or --interactive| UI[InteractiveShell]
     P -->|--snapshot| SNAP[StateController read supported state]
     UI --> L[Light registry writes]
     UI --> B[Balanced registry services tasks and apps]
     UI --> A[Aggressive WFP firewall apps purge and network]
-    UI --> W[Reinforcement servicing event task]
 ```
 
 `--snapshot <file.json>` conecta `main.cpp` con `StateController` y escribe el baseline de los servicios, tareas y valores de registro que tienen captura implementada. `--restore` sigue rechazado con exit code 3; el archivo no se presenta como mecanismo de rollback.
@@ -78,12 +76,12 @@ stateDiagram-v2
     RECOVERY_APPLIED --> [*]
 ```
 
-- Constructor de `PolicyEngine` llama una sola vez a `LoadAndRecover`; `--reconcile` continúa después con servicios y tareas sin replayar la recuperación.
+- Constructor de `PolicyEngine` llama una sola vez a `LoadAndRecover`; `--reconcile` termina después de esa recuperación y no aplica mutaciones de servicios o tareas sin snapshot journaled.
 - El parser usa la longitud del payload para localizar el checksum; no interpreta el último separador como si fuera parte del payload.
 - La reconstrucción agrupa los registros por `id` y conserva solo el último estado durable antes de decidir si debe recuperar. El `PENDING` histórico de una transacción que terminó en `COMMITTED` ya no dispara un rollback falso.
 - Tras el rollback de arranque se añade un registro `RECOVERY_APPLIED` o `FAILED`, de modo que el siguiente arranque puede distinguir una recuperación terminada de una que no pudo completarse.
 - Interactive `R` revierte solo registros marcados `COMMITTED`. Elimina `aegis_wal.jsonl` únicamente si todas las reversiones y sus marcas durables terminan correctamente; si una falla, conserva el journal para otro intento.
-- `Reinforcement` se registra solo desde la ruta interactiva y dispara por eventos de servicing de Windows con argumento `--reconcile`. La tarea se limita a cinco minutos y usa `TASK_INSTANCES_IGNORE_NEW`; no mantiene un proceso residente ni acumula ejecuciones concurrentes.
+- La tarea automática de `Reinforcement` no se registra: apuntaría a una ruta sin mutaciones de servicios/tareas journaled y no debe sugerir una reconciliación que el WAL no puede revertir.
 
 ## 4. Límite de validación
 
