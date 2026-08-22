@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.1.2] - 2026-08-22
 
 ### Fixed
 
@@ -16,6 +16,14 @@
 - Persiste también el resultado de una reversión cuando falla el append del registro `COMMITTED`.
 - Identifica las transacciones por su secuencia durable en vez de depender solo del reloj del sistema.
 - Escribe los seis tipos de registro declarados con su tipo Win32 correspondiente.
+- Mantiene el snapshot fuera de la ruta de recuperación y lo reemplaza de forma atómica con la versión real del sistema.
+
+### Riesgo y actualización
+
+- `--restore` sigue rechazado; esta release no presenta un mecanismo de restauración que todavía no tiene paridad de estado.
+- La versión describe una base de compilación y contratos de recuperación, no una validación privilegiada completa en Windows.
+
+## [Unreleased]
 
 ## [0.1.1] - 2026-08-20
 

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(Aegis11 VERSION 0.1.1 LANGUAGES CXX RC)
+project(Aegis11 VERSION 0.1.2 LANGUAGES CXX RC)
 
 if(NOT WIN32)
     message(FATAL_ERROR "Aegis11 is a Windows-only application and must be built on a Windows runner.")

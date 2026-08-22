@@ -19,7 +19,7 @@
 #include <cstring>
 #include <malloc.h>
 
-#define AEGIS_ENGINE_VERSION "0.1.1"
+#define AEGIS_ENGINE_VERSION "0.1.2"
 #define WAL_SECTOR_SIZE 4096
 
 using json = nlohmann::json;
