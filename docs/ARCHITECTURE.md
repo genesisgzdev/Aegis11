@@ -29,6 +29,8 @@ flowchart TD
 
 El parser acepta un solo modo operativo por invocación. La ruta de snapshot, simulate y apply se resuelve antes de construir `PolicyEngine`, porque su constructor carga el WAL y puede iniciar recuperación; una captura no debe entrar en esa ruta como efecto lateral.
 
+El snapshot toma la versión y build mediante `SysInfo::GetCapabilities` y serializa primero un archivo temporal. `MoveFileExW` lo reemplaza con `MOVEFILE_WRITE_THROUGH`; si la serialización o el reemplazo falla, se elimina el temporal y no se presenta un baseline parcial como válido.
+
 ## 2. Transacción de política de registro
 
 ~~~mermaid
