@@ -59,14 +59,17 @@ El WAL usa entradas alineadas a 4096 bytes, FNV-1a sobre el payload, marcador fi
 stateDiagram-v2
     [*] --> PENDING: append before registry write
     PENDING --> COMMITTED: registry write and durable log append
-    PENDING --> RECOVERY_APPLIED: startup rollback
-    PARTIAL_APPLY --> RECOVERY_APPLIED: startup rollback
+    PENDING --> RECOVERY_APPLIED: startup rollback and durable marker
+    PARTIAL_APPLY --> RECOVERY_APPLIED: startup rollback and durable marker
+    PENDING --> FAILED: rollback error and durable failure marker
     COMMITTED --> ROLLED_BACK: interactive R
     FAILED --> [*]
     RECOVERY_APPLIED --> [*]
 ~~~
 
 - Constructor de `PolicyEngine` llama `LoadAndRecover`; `--reconcile` lo vuelve a llamar antes de ejecutar servicios y tareas.
+- El parser usa la longitud del payload para localizar el checksum; no interpreta el último separador como si fuera parte del payload.
+- Tras el rollback de arranque se añade un registro `RECOVERY_APPLIED` o `FAILED`, de modo que el siguiente arranque puede distinguir una recuperación terminada de una que no pudo completarse.
 - Interactive `R` revierte solo registros marcados `COMMITTED` y elimina `aegis_wal.jsonl`.
 - `Reinforcement` se registra solo desde la ruta interactiva y dispara por eventos de servicing de Windows con argumento `--reconcile`.
 

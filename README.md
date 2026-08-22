@@ -50,7 +50,9 @@ flowchart LR
 
 La vista separa las rutas que realmente existen. Los nombres de módulos no son evidencia de que cada capacidad esté validada en runtime.
 
-El WAL usa entradas JSONL con estados de transacción y validación de integridad. Las garantías concretas dependen de la implementación del módulo y deben probarse con el sistema que se vaya a modificar.
+El WAL usa entradas JSONL con longitud explícita, payload, checksum FNV-1a y marcador final. El lector valida la longitud antes de extraer el checksum, y el recovery guarda una nueva transición después de intentar el rollback. Eso detecta framing roto y hace visible un rollback fallido; no equivale a snapshot completo ni a rollback de todos los módulos.
+
+Los tipos `REG_DWORD`, `REG_QWORD`, `REG_SZ`, `REG_EXPAND_SZ`, `REG_MULTI_SZ` y `REG_BINARY` se escriben con su tipo Win32 correspondiente. La vista WOW64 y la ejecución privilegiada siguen necesitando pruebas nativas.
 
 ## Uso
 

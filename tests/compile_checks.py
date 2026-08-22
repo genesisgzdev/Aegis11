@@ -17,6 +17,9 @@ require("CMakeLists.txt", 'add_executable(aegis11\n')
 require("include/Core/Logger.hpp", 'EscapeJsonString')
 require("include/Modules/NetworkWfp.hpp", 'FwpmFilterAdd0')
 require("include/Core/PolicyEngine.hpp", 'written == padded_size')
+require("include/Core/PolicyEngine.hpp", 'const size_t crcSeparator = payloadStart + payloadSize;')
+require("include/Core/PolicyEngine.hpp", 'tx.state = recovered ? TxState::RECOVERY_APPLIED : TxState::FAILED;')
+require("include/Core/PolicyEngine.hpp", 'const LONG result = RegDeleteTreeW(root, path.c_str());')
 
 for path in ROOT.rglob("*"):
     if path.is_file() and path.suffix in {".cpp", ".hpp", ".h", ".bat", ".yml", ".yaml"}:

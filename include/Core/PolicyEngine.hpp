@@ -146,11 +146,17 @@ namespace Aegis::Core {
                 line.pop_back(); // Remove \xAA
                 
                 size_t firstPipe = line.find('|');
-                size_t lastPipe = line.rfind('|');
-                if (firstPipe != std::string::npos && lastPipe != std::string::npos && firstPipe != lastPipe) {
-                    std::string payload = line.substr(firstPipe + 1, lastPipe - firstPipe - 1);
-                    std::string crcStr = line.substr(lastPipe + 1);
+                if (firstPipe != std::string::npos) {
                     try {
+                        const size_t payloadSize = std::stoull(line.substr(0, firstPipe));
+                        const size_t payloadStart = firstPipe + 1;
+                        const size_t crcSeparator = payloadStart + payloadSize;
+                        const size_t crcEnd = line.find('|', crcSeparator + 1);
+                        if (crcEnd == std::string::npos || crcSeparator >= line.size() || line[crcSeparator] != '|' || crcEnd + 1 != line.size()) {
+                            continue;
+                        }
+                        std::string payload = line.substr(payloadStart, payloadSize);
+                        std::string crcStr = line.substr(crcSeparator + 1, crcEnd - crcSeparator - 1);
                         if (std::stoull(crcStr) == Utils::FNV1a64(payload)) {
                             auto tx = TransactionRecord::from_json(json::parse(payload));
                             journal.push_back(tx);
@@ -171,29 +177,36 @@ namespace Aegis::Core {
             for (auto& tx : journal) {
                 if (tx.state == TxState::PENDING || tx.state == TxState::PARTIAL_APPLY) {
                     log.Log(LogLevel::WARN, "WAL", 301, "Recovery: Reverting incomplete transaction " + tx.name);
-                    RollbackRecord(tx);
-                    tx.state = TxState::RECOVERY_APPLIED;
+                    const bool recovered = RollbackRecord(tx);
+                    tx.state = recovered ? TxState::RECOVERY_APPLIED : TxState::FAILED;
+                    if (!AtomicAppendJournal(tx)) {
+                        log.Log(LogLevel::ERR, "WAL", 305, "Unable to persist recovery result for transaction " + tx.name);
+                    }
                 }
             }
         }
 
-        void RollbackRecord(const TransactionRecord& tx) {
+        bool RollbackRecord(const TransactionRecord& tx) {
             HKEY root = (HKEY)tx.rootHive;
             std::wstring path = Utils::s2ws(tx.path);
             std::wstring key = Utils::s2ws(tx.key);
             if (!tx.keyExistedBefore) {
-                RegDeleteTreeW(root, path.c_str());
+                const LONG result = RegDeleteTreeW(root, path.c_str());
+                return result == ERROR_SUCCESS || result == ERROR_FILE_NOT_FOUND;
             } else {
                 HKEY hKey;
                 if (RegOpenKeyExW(root, path.c_str(), 0, KEY_WRITE | KEY_WOW64_64KEY, &hKey) == ERROR_SUCCESS) {
+                    LONG result = ERROR_SUCCESS;
                     if (tx.valueExistedBefore) {
-                        RegSetValueExW(hKey, key.c_str(), 0, tx.originalType, tx.originalData.data(), (DWORD)tx.originalData.size());
+                        result = RegSetValueExW(hKey, key.c_str(), 0, tx.originalType, tx.originalData.data(), (DWORD)tx.originalData.size());
                     } else {
-                        RegDeleteValueW(hKey, key.c_str());
+                        result = RegDeleteValueW(hKey, key.c_str());
                     }
                     RegCloseKey(hKey);
+                    return result == ERROR_SUCCESS || result == ERROR_FILE_NOT_FOUND;
                 }
             }
+            return false;
         }
 
         bool ApplyPolicy(PolicyDefinition def) {
