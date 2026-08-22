@@ -18,6 +18,7 @@ El proyecto trabaja sobre componentes sensibles de Windows como registro, servic
 - `--reconcile`, `--simulate` y `--apply` están expuestos por la CLI.
 - `--apply` ejecuta la lista fija de servicios de `ServiceManager`; no equivale al perfil interactivo Aggressive.
 - `--reconcile` recupera el WAL y vuelve a aplicar las comprobaciones de servicios y tareas que hoy implementa el código.
+- Si una mutación de registro falla después de escribir `PENDING`, la ruta marca el estado parcial, intenta compensarlo y guarda el resultado antes de devolver error.
 - `--simulate` solo muestra el plan de servicios y no simula todos los módulos interactivos.
 - La ejecución con privilegios, los cambios de red y la reconciliación sobre un sistema real necesitan validación específica en Windows.
 - `--snapshot <file.json>` escribe un baseline de los servicios, tareas y claves de registro que los módulos saben capturar. `--restore` sigue rechazado porque todavía no existe una restauración con paridad de estado.
@@ -51,7 +52,7 @@ flowchart LR
 
 La vista separa las rutas que realmente existen. Los nombres de módulos no son evidencia de que cada capacidad esté validada en runtime.
 
-El WAL usa entradas JSONL con longitud explícita, payload, checksum FNV-1a y marcador final. El lector valida la longitud antes de extraer el checksum, y el recovery guarda una nueva transición después de intentar el rollback. Eso detecta framing roto y hace visible un rollback fallido; no equivale a snapshot completo ni a rollback de todos los módulos.
+El WAL usa entradas JSONL con longitud explícita, payload, checksum FNV-1a y marcador final. El lector valida la longitud antes de extraer el checksum, y cada fallo de aplicación o recovery intenta dejar una transición durable que describa el resultado. Eso detecta framing roto y hace visible un rollback fallido; no equivale a snapshot completo ni a rollback de todos los módulos.
 
 Los tipos `REG_DWORD`, `REG_QWORD`, `REG_SZ`, `REG_EXPAND_SZ`, `REG_MULTI_SZ` y `REG_BINARY` se escriben con su tipo Win32 correspondiente. La vista WOW64 y la ejecución privilegiada siguen necesitando pruebas nativas.
 

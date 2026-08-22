@@ -50,7 +50,9 @@ sequenceDiagram
         PE->>WAL: append committed record and flush
         PE-->>UI: true
       else write or durable commit fails
+        PE->>WAL: append partial or failed result
         PE->>REG: RollbackRecord
+        PE->>WAL: append rollback result
         PE-->>UI: false
       end
     end

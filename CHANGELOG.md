@@ -25,6 +25,8 @@
 
 ## [Unreleased]
 
+- Si una escritura de registro falla después del `PENDING`, la ruta persiste el estado parcial, intenta revertirlo y guarda el resultado antes de devolver error.
+
 ## [0.1.1] - 2026-08-20
 
 ### Changed
