@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "../Core/Logger.hpp"
 #include "../Core/State.hpp"
 #include "../Core/SysInfo.hpp"
@@ -20,7 +20,7 @@ namespace Aegis::Engine {
         StateController(Core::Logger& l, Modules::ServiceManager& s, Modules::RegistryManager& r, Modules::TaskManager& t) 
             : log(l), sm(s), rm(r), tm(t) {}
 
-        void CreateBaseline(const std::string& filepath) {
+        bool CreateBaseline(const std::string& filepath) {
             log.Log(Core::LogLevel::INFO, "STATE", "Creating global system baseline snapshot...");
             Core::SystemSnapshot snap;
             
@@ -43,7 +43,7 @@ namespace Aegis::Engine {
             std::ofstream out(temporary, std::ios::binary | std::ios::trunc);
             if (!out.is_open()) {
                 log.Log(Core::LogLevel::ERR, "STATE", "Failed to write snapshot file.");
-                return;
+                return false;
             }
 
             nlohmann::json j = snap;
@@ -54,7 +54,7 @@ namespace Aegis::Engine {
                 std::error_code cleanupError;
                 std::filesystem::remove(temporary, cleanupError);
                 log.Log(Core::LogLevel::ERR, "STATE", "Failed to flush snapshot file.");
-                return;
+                return false;
             }
             out.close();
 
@@ -62,9 +62,10 @@ namespace Aegis::Engine {
                 std::error_code cleanupError;
                 std::filesystem::remove(temporary, cleanupError);
                 log.Log(Core::LogLevel::ERR, "STATE", "Failed to replace snapshot file atomically.");
-                return;
+                return false;
             }
             log.Log(Core::LogLevel::INFO, "STATE", "Baseline saved to: " + filepath);
+            return true;
         }
     };
 }

@@ -79,7 +79,7 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-El proyecto es Windows-only. El job de CI demuestra que el código compila y que pasan los checks estáticos del repositorio; no prueba que una política privilegiada sea segura para cualquier máquina.
+El proyecto es Windows-only. El job de CI compila y ejecuta CTest, incluidas pruebas reales de registro en una clave temporal de HKCU: conflictos con otro escritor, reintentos de rollback y reapertura del WAL; no prueba que una política privilegiada sea segura para cualquier máquina.
 
 ## Qué respalda cada nivel
 
@@ -96,3 +96,7 @@ El flujo exacto por modo está en [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 ## Licencia
 
 GPL-3.0. Consulta [LICENSE](LICENSE).
+
+## Recuperación del registro
+
+El rollback conserva valores escritos por terceros y vuelve a intentar compensaciones fallidas sin descartar el WAL. Las transiciones con la misma secuencia conservan el orden durable. Si un valor ya volvió a su preimagen, la compensación es idempotente. Se elimina únicamente el valor creado por la transacción; puede quedar una clave contenedora vacía para evitar borrar estado ajeno. Un fallo de escritura del snapshot devuelve un código de error.

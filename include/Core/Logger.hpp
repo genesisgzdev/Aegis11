@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <windows.h>
 #include <string>
 #include <fstream>
@@ -34,7 +34,7 @@ namespace Aegis::Core {
             auto now = std::chrono::system_clock::now();
             auto time = std::chrono::system_clock::to_time_t(now);
             auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
-            std::tm tm_buf; localtime_s(&tm_buf, &time);
+            std::tm tm_buf; gmtime_s(&tm_buf, &time);
             std::ostringstream oss;
             oss << std::put_time(&tm_buf, "%Y-%m-%dT%H:%M:%S") << '.' << std::setfill('0') << std::setw(3) << ms.count() << "Z";
             return oss.str();

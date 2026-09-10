@@ -1,4 +1,4 @@
-﻿#include "../include/Core/RAII.hpp"
+#include "../include/Core/RAII.hpp"
 #include "../include/Core/Logger.hpp"
 #include "../include/Core/PolicyEngine.hpp"
 #include "../include/Core/StateEngine.hpp"
@@ -61,8 +61,7 @@ int main(int argc, char* argv[]) {
     }
     if (!runConfig.snapshot_file.empty()) {
         Aegis::Engine::StateController state(log, sm, rm, tm);
-        state.CreateBaseline(runConfig.snapshot_file);
-        return 0;
+        return state.CreateBaseline(runConfig.snapshot_file) ? 0 : 1;
     }
     if (!runConfig.restore_file.empty()) {
         std::cerr << "[!] Restore is not implemented; refusing to claim a rollback from a baseline file.\n";
