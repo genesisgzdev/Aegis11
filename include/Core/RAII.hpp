@@ -1,5 +1,7 @@
 ﻿#pragma once
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 #include <objbase.h>
 #include <utility>
@@ -16,11 +18,7 @@ namespace Aegis::Core {
         void close() noexcept {
             if (*this) {
                 Traits::close(m_handle);
-#ifdef _DEBUG
-                m_handle = reinterpret_cast<pointer>(0xDEADBEEF);
-#else
                 m_handle = Traits::invalid();
-#endif
             }
         }
 
@@ -40,7 +38,7 @@ namespace Aegis::Core {
         }
 
         [[nodiscard]] explicit operator bool() const noexcept { 
-            return m_handle != Traits::invalid() && m_handle != reinterpret_cast<pointer>(0xDEADBEEF); 
+            return m_handle != Traits::invalid();
         }
         
         [[nodiscard]] pointer get() const noexcept { return m_handle; }
@@ -52,11 +50,7 @@ namespace Aegis::Core {
 
         [[nodiscard]] pointer release() noexcept {
             pointer temp = m_handle;
-#ifdef _DEBUG
-            m_handle = reinterpret_cast<pointer>(0xDEADBEEF);
-#else
             m_handle = Traits::invalid();
-#endif
             return temp;
         }
 

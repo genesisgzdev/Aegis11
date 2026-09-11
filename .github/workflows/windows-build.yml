@@ -12,15 +12,19 @@ permissions:
 jobs:
   build:
     runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
     steps:
       - name: Checkout
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Configure
         run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 
-      - name: Build Release
-        run: cmake --build build --config Release --parallel
+      - name: Build ${{ matrix.configuration }}
+        run: cmake --build build --config ${{ matrix.configuration }} --parallel
 
       - name: Run compile checks
-        run: ctest --test-dir build -C Release --output-on-failure
+        run: ctest --test-dir build -C ${{ matrix.configuration }} --output-on-failure
