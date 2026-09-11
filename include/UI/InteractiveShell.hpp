@@ -14,6 +14,8 @@
 #include <string>
 #include <vector>
 #include <iomanip>
+#include <cstring>
+#include <limits>
 
 namespace Aegis::UI {
     class InteractiveShell {
@@ -29,70 +31,69 @@ namespace Aegis::UI {
 
         void PrintInfo() {
             auto caps = Core::SysInfo::GetCapabilities();
-            std::cout << "Aegis System Controller\n";
-            std::cout << "Host: Windows " << caps.osVersion << " (" << caps.buildNumber << ") [" << caps.sku << "]\n";
-            std::cout << "Hardware: " << (caps.is64Bit ? "x64" : "x86") << " (" << caps.processorCount << " Cores)\n";
-            std::cout << "--------------------------------------------------\n";
+            std::cout << "Aegis11 | Privacidad de Windows\n";
+            std::cout << "Windows " << caps.osVersion << " (" << caps.buildNumber << ") [" << caps.sku << "]\n";
+            std::cout << "Equipo: " << (caps.is64Bit ? "x64" : "x86") << " (" << caps.processorCount << " nucleos)\n";
+            std::cout << "Revisa cada cambio antes de decidir.\n";
         }
 
         void PrintMenu() {
-            std::cout << "\n Mitigation Presets:\n";
-            std::cout << "  [1] Light (Safe GPOs, No App removal)\n";
-            std::cout << "  [2] Balanced (reservado: no hay rollback entre módulos)\n";
-            std::cout << "  [3] Aggressive (reservado: incluye operaciones irreversibles)\n";
-            std::cout << "  [R] Rollback WAL Database\n";
-            std::cout << "  [0] Exit\n\n> ";
+            std::cout << "\nQue quieres hacer?\n\n";
+            std::cout << "  1   Revisar ajustes de privacidad\n";
+            std::cout << "  R   Deshacer los cambios guardados por Aegis\n";
+            std::cout << "  0   Salir\n\nElige una opcion: ";
         }
 
         std::vector<Core::PolicyDefinition> GetBasePolicies() {
             std::vector<BYTE> val0 = {0,0,0,0};
             std::vector<BYTE> val1 = {1,0,0,0};
             return {
-                {L"Disable Telemetry", HKEY_LOCAL_MACHINE, L"SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection", L"AllowTelemetry", Core::RegType::DWORD, val0},
-                {L"Disable Copilot", HKEY_LOCAL_MACHINE, L"SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsCopilot", L"TurnOffWindowsCopilot", Core::RegType::DWORD, val1},
-                {L"Disable Web Search", HKEY_LOCAL_MACHINE, L"SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search", L"DisableWebSearch", Core::RegType::DWORD, val1},
-                {L"Block Edge Updates", HKEY_LOCAL_MACHINE, L"SOFTWARE\\Policies\\Microsoft\\EdgeUpdate", L"DoNotUpdateToEdgeWithChromium", Core::RegType::DWORD, val1}
+                {L"Reducir el envio de datos de diagnostico", HKEY_LOCAL_MACHINE, L"SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection", L"AllowTelemetry", Core::RegType::DWORD, val0},
+                {L"Desactivar Copilot", HKEY_LOCAL_MACHINE, L"SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsCopilot", L"TurnOffWindowsCopilot", Core::RegType::DWORD, val1},
+                {L"Desactivar resultados web en la busqueda", HKEY_LOCAL_MACHINE, L"SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search", L"DisableWebSearch", Core::RegType::DWORD, val1},
             };
         }
 
         bool ConfirmExecution(const std::vector<Core::PolicyDefinition>& policies, const std::string& profile) {
-            std::cout << "\n--- EXECUTION DIFF PREVIEW: " << profile << " ---\n";
+            std::cout << "\nCambios propuestos | " << profile << "\n";
+            std::cout << "Estos ajustes dependen de la edicion de Windows.\n\n";
 
             // Real Diff Generation for Registry GPOs
             for (const auto& p : policies) {
                 HKEY hKey;
                 DWORD currentVal = 0;
                 bool exists = false;
-                if (RegOpenKeyExW(p.rootHive, p.path.c_str(), 0, KEY_READ | KEY_WOW64_64KEY, &hKey) == ERROR_SUCCESS) {
+                const LSTATUS opened = RegOpenKeyExW(p.rootHive, p.path.c_str(), 0, KEY_READ | KEY_WOW64_64KEY, &hKey);
+                if (opened == ERROR_SUCCESS) {
                     DWORD type = 0, size = sizeof(DWORD);
-                    if (RegQueryValueExW(hKey, p.key.c_str(), nullptr, &type, (LPBYTE)&currentVal, &size) == ERROR_SUCCESS) {
-                        exists = true;
-                    }
+                    const LSTATUS queried = RegQueryValueExW(hKey, p.key.c_str(), nullptr, &type, reinterpret_cast<LPBYTE>(&currentVal), &size);
                     RegCloseKey(hKey);
+                    if (queried == ERROR_SUCCESS && type == REG_DWORD && size == sizeof(DWORD)) {
+                        exists = true;
+                    } else if (queried != ERROR_FILE_NOT_FOUND) {
+                        std::cout << "No se pudo leer el valor actual con certeza. No se aplicara esta propuesta.\n";
+                        return false;
+                    }
+                } else if (opened != ERROR_FILE_NOT_FOUND && opened != ERROR_PATH_NOT_FOUND) {
+                    std::cout << "Windows no permitio consultar un ajuste. Revisa los permisos antes de continuar.\n";
+                    return false;
                 }
 
-                DWORD targetVal = *((DWORD*)p.targetData.data());
-                std::cout << " [GPO] " << Core::Utils::ws2s(p.name) << "\n";
+                DWORD targetVal = 0;
+                std::memcpy(&targetVal, p.targetData.data(), sizeof(targetVal));
+                std::cout << "  " << Core::Utils::ws2s(p.name) << "\n";
                 if (exists) {
-                    if (currentVal == targetVal) std::cout << "       State: [OK] Already at " << targetVal << "\n";
-                    else std::cout << "       State: [DRIFT] Will change " << currentVal << " -> " << targetVal << "\n";
+                    if (currentVal == targetVal) std::cout << "    Ya tiene el valor " << targetVal << "\n";
+                    else std::cout << "    Valor actual: " << currentVal << " | Nuevo valor: " << targetVal << "\n";
                 } else {
-                    std::cout << "       State: [NEW] Will insert value " << targetVal << "\n";
+                    std::cout << "    Se guardara un ajuste nuevo con valor " << targetVal << "\n";
                 }
             }
 
-            if (profile == "BALANCED" || profile == "AGGRESSIVE") {
-                std::cout << " [COM] Will resolve dependencies and STOP Telemetry Services\n";
-                std::cout << " [COM] Will verify Digital Signatures & Disable Telemetry Tasks\n";
-            }
-            if (profile == "AGGRESSIVE") {
-                std::cout << " [COM] Will spawn native Appx removal operations\n";
-                std::cout << " [WFP] Will commit Network Layer block for telemetry endpoints\n";
-            }
-
-            std::cout << "\nType 'YES' to authorize the journaled registry profile: ";
+            std::cout << "\nSe guarda el estado anterior para poder deshacer estos ajustes.\n";
+            std::cout << "Escribe SI para aplicarlos o cualquier otra cosa para volver: ";
             std::string ans; std::cin >> ans;
-            return (ans == "YES");
+            return (ans == "SI" || ans == "YES");
         }
 
     public:
@@ -107,7 +108,7 @@ namespace Aegis::UI {
                 PrintInfo();
 
                 if (Core::ProcessHost::CurrentState == Core::AppState::RECOVERY) {
-                    std::cout << "[!] SYSTEM IN RECOVERY STATE. Run Rollback [R] before applying new policies.\n";
+                    std::cout << "Hay una recuperacion pendiente. Elige R antes de aplicar otros cambios.\n";
                 }
 
                 PrintMenu();
@@ -120,10 +121,14 @@ namespace Aegis::UI {
                 auto basePols = GetBasePolicies();
                 switch (choice) {
                     case '1':
-                        if (ConfirmExecution(basePols, "LIGHT")) {
+                        if (Core::ProcessHost::CurrentState == Core::AppState::RECOVERY) {
+                            std::cout << "Primero recupera los cambios pendientes con R.\n";
+                            break;
+                        }
+                        if (ConfirmExecution(basePols, "Privacidad")) {
                             for (const auto& p : basePols) {
                                 if (!engine.ApplyPolicy(p)) {
-                                    std::cout << "[!] Policy failed. Remaining changes were not applied; inspect the WAL and recovery state.\n";
+                                    std::cout << "No se pudo guardar un ajuste. Se detuvieron los siguientes cambios. Revisa el registro antes de continuar.\n";
                                     break;
                                 }
                             }
@@ -138,14 +143,16 @@ namespace Aegis::UI {
                     case 'r': case 'R':
                         if (engine.RollbackAll()) {
                             Core::ProcessHost::CurrentState = Core::AppState::NORMAL;
+                            std::cout << "Se recuperaron los cambios guardados.\n";
                         } else {
                             Core::ProcessHost::CurrentState = Core::AppState::RECOVERY;
-                            std::cout << "[!] Rollback incomplete. The WAL was retained for another attempt.\n";
+                            std::cout << "Quedan cambios por recuperar. Se conserva el registro para volver a intentarlo.\n";
                         }
                         break;
                     case '0': running = false; break;
+                    default: std::cout << "Elige 1, R o 0.\n"; break;
                 }
-                if(running) { std::cout << "\nOperation Complete. Press Enter to return..."; std::cin.ignore(); std::cin.get(); }
+                if(running) { std::cout << "\nPulsa Enter para volver al menu."; std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); std::cin.get(); }
             }
         }
     };

@@ -1,106 +1,71 @@
 # Aegis11
 
-[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?style=flat-square&logo=c%2B%2B&logoColor=white)](https://isocpp.org/)
-[![Windows](https://img.shields.io/badge/platform-Windows-0078D4?style=flat-square&logo=windows&logoColor=white)](https://www.microsoft.com/windows/)
-[![CMake](https://img.shields.io/badge/build-CMake%20%2B%20MSVC-064F8C?style=flat-square&logo=cmake&logoColor=white)](https://cmake.org/)
-[![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square)](LICENSE)
+Revisa ajustes de privacidad de Windows antes de cambiarlos. Aegis muestra el valor actual y el propuesto, guarda el estado anterior y permite deshacer los cambios de registro que ha guardado.
 
-Aegis11 es un controlador de políticas para Windows. Su objetivo es aplicar una configuración deseada, registrar los cambios y volver a comprobar el estado cuando el sistema se desvía de esa configuración.
+[Ver comprobaciones](https://github.com/genesisgzdev/Aegis11/actions) · [Guía de uso](docs/USO.md) · [Cómo funciona](docs/ARCHITECTURE.md)
 
-En 30 segundos: `--simulate` muestra el plan de servicios, `--apply` se rechaza porque esa ruta todavía no tiene rollback journaled con paridad y `--reconcile` recupera únicamente el WAL durable. `--snapshot` captura el estado que los módulos soportan sin cargar la ruta de recuperación; los modos son mutuamente excluyentes. Sin argumentos abre el modo interactivo: Light puede aplicar cambios de registro por el WAL; Balanced y Aggressive se rechazan hasta tener rollback entre módulos. Es una base de control de estado, no un antivirus ni un EDR certificado.
+## Qué puedes hacer
 
-El proyecto trabaja sobre componentes sensibles de Windows como registro, servicios, tareas programadas y Windows Filtering Platform. Por eso el README separa lo que compila de lo que todavía necesita pruebas nativas en una máquina Windows aislada.
+- Revisar ajustes de diagnóstico, Copilot y búsqueda web de Windows
+- Decidir después de ver qué valores cambiarán
+- Recuperar cambios de registro guardados por Aegis
+- Guardar una copia de los ajustes compatibles para compararlos
 
-## Estado actual
+El menú de privacidad no desinstala aplicaciones ni bloquea las actualizaciones de Edge. El efecto de algunas políticas depende de la edición de Windows.
 
-- La ruta reproducible de compilación usa Visual Studio 2022, MSVC v143, Windows SDK 10.0.22000 o superior y CMake 3.21 o superior.
-- GitHub Actions comprueba la compilación de Windows y los checks del repositorio.
-- `--reconcile`, `--simulate` y `--apply` están expuestos por la CLI.
-- `--apply` está expuesto para detectar la opción, pero termina con exit code 3 hasta que las mutaciones tengan snapshot y rollback con paridad. El menú interactivo también rechaza Balanced y Aggressive por la misma razón.
-- `--reconcile` recupera el WAL y no modifica servicios ni tareas: esas mutaciones todavía no tienen snapshot y rollback con paridad.
-- Si una mutación de registro falla después de escribir `PENDING`, la ruta marca el estado parcial, intenta compensarlo y guarda el resultado antes de devolver error.
-- Antes de compensar una mutación de registro, el WAL compara el tipo y los bytes actuales con el valor que escribió. Si otro proceso lo cambió, conserva el journal y no sobrescribe ni borra ese cambio.
-- La opción `R` solo borra el WAL cuando todas las reversiones terminan correctamente; si una falla, conserva el journal y mantiene el proceso en estado de recuperación.
-- Si las reversiones terminan pero el archivo WAL no puede borrarse, la operación también se considera incompleta.
-- `--simulate` solo muestra el plan de servicios y no simula todos los módulos interactivos.
-- La ejecución con privilegios, los cambios de red y la reconciliación sobre un sistema real necesitan validación específica en Windows.
-- `--snapshot <file.json>` escribe un baseline versionado. Conserva bytes y tipo del registro, vista de Windows, configuración básica y dependencias del servicio y XML de tareas cuando están disponibles. `--restore` sigue rechazado porque todavía no existe una restauración con paridad de estado.
-- El parser rechaza combinaciones de modos como `--snapshot --apply` en vez de dejar que el orden interno decida qué operación se ejecuta.
+## Abrir Aegis
 
-Esto no es un antivirus ni un EDR terminado. Es una base de ingeniería para control de estado y mitigación en Windows.
+Necesitas Windows y el ejecutable `Aegis11.exe` compilado a partir de esta versión del código. Si descargas una versión publicada, comprueba su fecha y sus notas: puede contener una interfaz anterior.
 
-## Flujo y límites
+Abre el ejecutable. Verás tres opciones:
 
-- `PolicyEngine` y el WAL coordinan transacciones y recuperación
-- `--reconcile` usa la recuperación que ejecuta `PolicyEngine` al construirse y termina sin mutaciones de servicios o tareas
-- `Registry`, `Service` y `Task` inspeccionan y aplican políticas del sistema
-- `NetworkWfp` y `FirewallManager` encapsulan las capas de filtrado
-- `AppxManager` y `DataPurge` cubren operaciones de paquetes y limpieza
-- La tarea automática de reinforcement está desactivada hasta que exista journaling con rollback de servicios y tareas
-- `InteractiveShell` y `ArgumentParser` forman la interfaz de consola
+| Opción | Qué hace |
+| --- | --- |
+| `1` | Muestra los ajustes de privacidad propuestos |
+| `R` | Recupera los cambios guardados por Aegis |
+| `0` | Cierra el programa |
+
+La opción 1 muestra los valores antes de pedir que escribas `SI`. Cualquier otra respuesta vuelve al menú. Los cambios del equipo requieren los permisos que Windows exija; no se eluden desde Aegis.
 
 ```mermaid
-flowchart LR
-    A[CLI] --> B{modo}
-    B -->|simulate| C[plan de servicios sin aplicar]
-    B -->|apply| D["rechazado: sin rollback de servicios"]
-    B -->|reconcile| E[WAL recovery]
-    E --> J[sin mutaciones no journaled]
-    B -->|sin argumentos| F[InteractiveShell]
-    F --> G["Light: cambios de registro"]
-    F --> K["Balanced: rechazado"]
-    F --> L["Aggressive: rechazado"]
-    G --> H[estado Windows]
-    G -. transacción .-> I[WAL JSONL]
+flowchart TD
+    A["Revisas los cambios propuestos"] --> B{"¿Quieres aplicarlos?"}
+    B -- Sí --> C["Aegis guarda el estado anterior y aplica cada ajuste"]
+    B -- No --> D["Vuelves al menú"]
+    C --> E["Puedes recuperar los cambios guardados"]
 ```
 
-La vista separa las rutas que realmente existen. Los nombres de módulos no son evidencia de que cada capacidad esté validada en runtime.
+## Consultar sin aplicar
 
-El WAL usa entradas JSONL con longitud explícita, payload, checksum FNV-1a y marcador final. El lector valida la longitud antes de extraer el checksum, y cada fallo de aplicación o recovery intenta dejar una transición durable que describa el resultado. Eso detecta framing roto y hace visible un rollback fallido; no equivale a snapshot completo ni a rollback de todos los módulos.
-
-Los tipos `REG_DWORD`, `REG_QWORD`, `REG_SZ`, `REG_EXPAND_SZ`, `REG_MULTI_SZ` y `REG_BINARY` se escriben con su tipo Win32 correspondiente. La vista WOW64 y la ejecución privilegiada siguen necesitando pruebas nativas.
-
-## Uso
+Desde una terminal puedes leer la ayuda o ver el plan de servicios:
 
 ```powershell
-.\aegis11.exe --help
-.\aegis11.exe --simulate
-.\aegis11.exe --apply
-.\aegis11.exe --reconcile
+.\Aegis11.exe --help
+.\Aegis11.exe --preview
 ```
 
-`--simulate` escribe en el log los servicios que se detendrían y deshabilitarían. `--apply` termina con exit code 3 porque la ruta de servicios todavía no tiene rollback journaled. `--reconcile` recupera el WAL y no ejecuta cambios de servicios o tareas sin journal. El registro automático de reinforcement está desactivado hasta que esa mutación tenga rollback con paridad. El modo sin argumentos abre el menú interactivo; solo Light ejecuta cambios de registro y los perfiles que no tienen rollback entre módulos se rechazan. Prueba primero en una instalación descartable y conserva una forma externa de recuperar el sistema.
+`--preview` consulta el plan de servicios. El menú muestra los ajustes de registro de privacidad. Son recorridos diferentes y la guía explica cuál elegir.
 
-## Compilar en Windows
+Para guardar los ajustes compatibles:
 
 ```powershell
-cmake -B build -S .
-cmake --build build --config Release
+.\Aegis11.exe --snapshot ajustes.json
+```
+
+Ese archivo sirve para comparar. No es una copia completa de Windows ni se puede usar todavía para restaurar todos sus componentes. `--apply`, `--restore` y los perfiles antiguos Balanced y Aggressive siguen sin estar disponibles.
+
+## Compilar esta versión
+
+Instala Visual Studio 2022 con desarrollo de escritorio en C++, Windows SDK y CMake. Desde una terminal de desarrollo de Visual Studio, dentro del repositorio:
+
+```powershell
+cmake -S . -B build -A x64
+cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-El proyecto es Windows-only. El job de CI compila y ejecuta CTest, incluidas pruebas reales de registro en una clave temporal de HKCU: conflictos con otro escritor, reintentos de rollback y reapertura del WAL; no prueba que una política privilegiada sea segura para cualquier máquina.
+Busca `Aegis11.exe` dentro de la carpeta de compilación. Las pruebas de Windows comprueban compilación y comportamiento concreto del motor de recuperación; no certifican todos los cambios posibles en cualquier equipo.
 
-## Qué respalda cada nivel
+Lee la [guía de uso y recuperación](docs/USO.md) antes de aplicar ajustes. El [mapa de archivos](docs/REPOSITORY_MAP.md) ayuda a recorrer el código.
 
-Aegis11 puede afectar conectividad, servicios, tareas y políticas del registro. No lo ejecutes sobre equipos ajenos ni en producción sin una política revisada, una copia recuperable y una prueba de aceptación para cada módulo.
-
-La compilación y `tests/compile_checks.py` cubren el código y el build. Las pruebas en VM Windows cubren cambios reales de registro, servicios, tareas, WFP, firewall o Appx. La ruta WFP verifica que el proveedor propio pueda leerse después del commit; la conectividad ICMP no se usa como sustituto de esa verificación. La recuperación necesita una prueba propia del cambio y de su reversión.
-
-El snapshot es una captura de estado, no un rollback. Restore sigue rechazado hasta que pueda restaurar servicios, tareas, ACL, triggers y valores de registro con la misma fidelidad. Las rutas actuales no cambian DACLs, recovery actions ni triggers de servicios porque esos datos todavía no forman parte del WAL.
-
-Las tareas solo se deshabilitan cuando su acción apunta a un ejecutable dentro de `System32` y la firma digital se verifica correctamente. El campo Author del XML no se usa como identidad.
-
-El flujo exacto por modo está en [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## Licencia
-
-GPL-3.0. Consulta [LICENSE](LICENSE).
-
-## Recuperación del registro
-
-El rollback conserva valores escritos por terceros y vuelve a intentar compensaciones fallidas sin descartar el WAL. Las transiciones con la misma secuencia conservan el orden durable. Si un valor ya volvió a su preimagen, la compensación es idempotente. Se elimina únicamente el valor creado por la transacción; puede quedar una clave contenedora vacía para evitar borrar estado ajeno. Un fallo de escritura del snapshot devuelve un código de error.
-
-`scripts/TrustAndLaunch.ps1` acepta `-Executable` y comprueba Authenticode antes de ejecutar. La firma opcional requiere el thumbprint completo de un certificado existente en CurrentUser/My. No instala certificados raíz, no elimina certificados ajenos y no cambia la marca de procedencia del archivo. La firma local no garantiza autorización por Smart App Control.
-
-El inventario completo de archivos y flujos está en [docs/REPOSITORY_MAP.md](docs/REPOSITORY_MAP.md).
+Licencia [MIT](LICENSE).
