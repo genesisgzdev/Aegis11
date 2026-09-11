@@ -68,4 +68,4 @@ Busca `Aegis11.exe` dentro de la carpeta de compilación. Las pruebas de Windows
 
 Lee la [guía de uso y recuperación](docs/USO.md) antes de aplicar ajustes. El [mapa de archivos](docs/REPOSITORY_MAP.md) ayuda a recorrer el código.
 
-Licencia [MIT](LICENSE).
+Licencia [GNU GPL v3](LICENSE).
