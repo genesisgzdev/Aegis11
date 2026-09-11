@@ -100,3 +100,7 @@ GPL-3.0. Consulta [LICENSE](LICENSE).
 ## Recuperación del registro
 
 El rollback conserva valores escritos por terceros y vuelve a intentar compensaciones fallidas sin descartar el WAL. Las transiciones con la misma secuencia conservan el orden durable. Si un valor ya volvió a su preimagen, la compensación es idempotente. Se elimina únicamente el valor creado por la transacción; puede quedar una clave contenedora vacía para evitar borrar estado ajeno. Un fallo de escritura del snapshot devuelve un código de error.
+
+`scripts/TrustAndLaunch.ps1` acepta `-Executable` y comprueba Authenticode antes de ejecutar. La firma opcional requiere el thumbprint completo de un certificado existente en CurrentUser/My. No instala certificados raíz, no elimina certificados ajenos y no cambia la marca de procedencia del archivo. La firma local no garantiza autorización por Smart App Control.
+
+El inventario completo de archivos y flujos está en [docs/REPOSITORY_MAP.md](docs/REPOSITORY_MAP.md).

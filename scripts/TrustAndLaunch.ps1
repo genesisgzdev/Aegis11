@@ -1,37 +1,25 @@
-﻿# Aegis11 Professional Signing & Trust Injector
-$ErrorActionPreference = 'SilentlyContinue'
+[CmdletBinding(SupportsShouldProcess = $true)]
+param(
+    [string]$Executable = (Join-Path $PSScriptRoot '..\build\Release\aegis11.exe'),
+    [string]$CertificateThumbprint
+)
+$ErrorActionPreference = 'Stop'
+$exePath = (Resolve-Path -LiteralPath $Executable -ErrorAction Stop).Path
+if (-not (Test-Path -LiteralPath $exePath -PathType Leaf)) { throw 'Executable is not a file.' }
 
-if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Start-Process powershell.exe "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
-    exit
+# Signing is optional and uses an existing certificate selected by its full
+# thumbprint. Trust stores and download provenance are never modified here.
+if ($CertificateThumbprint) {
+    if ($CertificateThumbprint -notmatch '^[A-Fa-f0-9]{40}$') { throw 'A complete certificate thumbprint is required.' }
+    $cert = Get-Item -LiteralPath "Cert:\CurrentUser\My\$CertificateThumbprint"
+    if (-not $cert.HasPrivateKey -or $cert.NotAfter -le (Get-Date)) { throw 'Signing certificate is expired or has no private key.' }
+    if ($PSCmdlet.ShouldProcess($exePath, 'Apply Authenticode signature')) {
+        $result = Set-AuthenticodeSignature -LiteralPath $exePath -Certificate $cert -HashAlgorithm SHA256
+        if ($result.Status -ne 'Valid') { throw "Signature verification failed: $($result.Status)" }
+    }
 }
-
-$exePath = "C:\Users\Genesisif\Projects\Aegis11\aegis11.exe"
-$certSubject = "CN=Aegis Systems Trusted Publisher"
-
-Write-Host "[*] Purging legacy Aegis certificates..." -ForegroundColor Cyan
-Get-ChildItem Cert:\LocalMachine\Root, Cert:\LocalMachine\TrustedPublisher | Where-Object { $_.Subject -match "Aegis" } | Remove-Item
-
-Write-Host "[*] Creating Enterprise-grade Local Signing Certificate..." -ForegroundColor Cyan
-$cert = New-SelfSignedCertificate -Subject $certSubject -Type CodeSigningCert -CertStoreLocation "Cert:\LocalMachine\My" -NotAfter (Get-Date).AddYears(10)
-
-Write-Host "[*] Injecting Certificate into Kernel Trust Stores (Root & TrustedPublisher)..." -ForegroundColor Cyan
-$rootStore = New-Object System.Security.Cryptography.X509Certificates.X509Store("Root", "LocalMachine")
-$rootStore.Open("ReadWrite")
-$rootStore.Add($cert)
-$rootStore.Close()
-
-$pubStore = New-Object System.Security.Cryptography.X509Certificates.X509Store("TrustedPublisher", "LocalMachine")
-$pubStore.Open("ReadWrite")
-$pubStore.Add($cert)
-$pubStore.Close()
-
-Write-Host "[*] Applying Authenticode SHA256 Signature to aegis11.exe..." -ForegroundColor Cyan
-Set-AuthenticodeSignature -FilePath $exePath -Certificate $cert -HashAlgorithm SHA256
-
-Write-Host "[*] Stripping 'Mark of the Web' NTFS Stream..." -ForegroundColor Cyan
-Unblock-File -Path $exePath
-
-Write-Host "[+] Cryptographic Trust established. Smart App Control should now authorize execution." -ForegroundColor Green
-Write-Host "[+] Launching Engine..." -ForegroundColor Green
-Start-Process -FilePath $exePath
+$signature = Get-AuthenticodeSignature -LiteralPath $exePath
+if ($signature.Status -ne 'Valid') { throw "Executable is not trusted by Windows: $($signature.Status)" }
+if ($PSCmdlet.ShouldProcess($exePath, 'Launch verified executable')) {
+    Start-Process -FilePath $exePath -WorkingDirectory (Split-Path -Parent $exePath)
+}
