@@ -1,93 +1,65 @@
-# Aegis11 architecture
+# Cómo guarda y recupera cambios Aegis
 
-Aegis11 tiene una ruta interactiva amplia y tres rutas CLI deliberadamente más estrechas. Documentarlas como si todas ejecutaran el mismo perfil sería incorrecto.
+Aegis separa consultar de modificar. El menú de privacidad cambia valores de registro que puede guardar y recuperar. La copia de ajustes y el plan de servicios son consultas diferentes.
 
-## Cómo leerlo
+## Qué ejecuta cada entrada
 
-La primera figura es un mapa de modos, no una promesa de que todos los módulos se ejecuten juntos. La secuencia explica la única transacción con WAL documentada aquí. El cierre separa compilación de comportamiento privilegiado observado en Windows.
+| Entrada | Comportamiento |
+| --- | --- |
+| Sin argumentos o `--interactive` | Abre el menú de privacidad y recuperación |
+| `--preview` | Consulta el plan de servicios; admite los alias anteriores |
+| `--snapshot archivo.json` | Guarda los ajustes compatibles para comparar |
+| `--reconcile` | Carga y recupera transacciones pendientes |
+| `--apply` o `--restore` | Rechaza la operación con código 3 |
 
-## 1. Enrutamiento por modo
+El parser admite un único modo por ejecución. Las consultas de copia y servicios se resuelven antes de construir el motor de recuperación para que no recuperen transacciones como efecto lateral.
+
+El menú solo anuncia acciones disponibles. Conserva el rechazo de los números antiguos de Balanced y Aggressive para que una entrada antigua no termine ejecutando otro perfil. La propuesta de privacidad no añade políticas de bloqueo de actualizaciones de Edge.
+
+## Cambiar un valor
 
 ```mermaid
 flowchart TD
-    MAIN[main program] --> P[argument parser]
-    P -->|invalid/help| EXIT[exit 2 or 0]
-    P -->|--simulate| DRY[ServiceManager dry-run]
-    P -->|--apply| APPLY["reject: no journal parity"]
-    P -->|--reconcile| REC[PolicyEngine LoadAndRecover]
-    REC --> SAFE[No unjournaled mutation]
-    P -->|no args or --interactive| UI[InteractiveShell]
-    P -->|--snapshot| SNAP[StateController read supported state]
-    UI --> L[Light registry writes]
-    UI --> B["Balanced rejected: no cross-module rollback parity"]
-    UI --> A["Aggressive rejected: non-journaled or irreversible operations"]
+    A["Leer el valor actual"] --> B["Guardar cómo estaba antes"]
+    B --> C["Escribir el valor elegido"]
+    C --> D{"¿Se guardó todo correctamente?"}
+    D -- Sí --> E["Confirmar el cambio"]
+    D -- No --> F["Intentar recuperar el valor anterior"]
 ```
 
-`--snapshot <file.json>` conecta `main.cpp` con `StateController` y escribe el baseline de los servicios, tareas y valores de registro que tienen captura implementada. El esquema versionado conserva tipo y bytes de registro, vista de Windows, configuración básica del servicio, dependencias y XML de la tarea cuando el sistema los devuelve. `--restore` sigue rechazado con exit code 3; el archivo no se presenta como mecanismo de rollback.
+El registro de recuperación se llama WAL porque se escribe antes del cambio. Las entradas tienen comprobación de integridad y se vacían a disco. Si guardar la confirmación falla, el motor intenta recuperar el cambio en lugar de presentarlo como completo.
 
-El parser acepta un solo modo operativo por invocación. La ruta de snapshot, simulate y apply se resuelve antes de construir `PolicyEngine`, porque su constructor carga el WAL y puede iniciar recuperación; una captura no debe entrar en esa ruta como efecto lateral.
+Para reconstruir el estado, el motor agrupa entradas por transacción y conserva su última marca durable. Un registro antiguo de «pendiente» no revierte un cambio que después quedó confirmado.
 
-El snapshot toma la versión y build mediante `SysInfo::GetCapabilities` y serializa primero un archivo temporal. `MoveFileExW` lo reemplaza con `MOVEFILE_WRITE_THROUGH`; si la serialización o el reemplazo falla, se elimina el temporal y no se presenta un baseline parcial como válido.
+## Recuperar sin pisar otros cambios
 
-El esquema no afirma que todos los módulos estén cubiertos: una entrada puede marcar `exists: false`, y un módulo puede no producir entradas si Windows no permite consultarlo. La captura es evidencia para diseñar el contrato de restore, no autorización para mutar ni garantía de que el estado pueda restaurarse todavía.
+R intenta recuperar las transacciones confirmadas. Antes compara el valor actual con el que Aegis había escrito. Si otra herramienta lo cambió, informa un conflicto. No borra un árbol entero del registro para forzar que la recuperación parezca correcta.
 
-## 2. Transacción de política de registro
+El archivo de recuperación solo se elimina cuando todas las reversiones y sus marcas se guardaron correctamente. Si queda algo pendiente, se conserva para otro intento. El menú impide aplicar una propuesta mientras el proceso está en recuperación.
 
-```mermaid
-sequenceDiagram
-    participant UI as InteractiveShell
-    participant PE as PolicyEngine
-    participant WAL as recovery log
-    participant REG as Windows Registry
-    UI->>PE: ApplyPolicy definition
-    PE->>REG: read current key/value
-    alt target already equal
-      PE-->>UI: true without new transaction
-    else drift or missing
-    PE->>WAL: append pending record with integrity
-    PE->>REG: create key and set value
-      alt write succeeds
-        PE->>WAL: append committed record and flush
-        PE-->>UI: true
-      else write or durable commit fails
-        PE->>WAL: append partial or failed result
-        PE->>REG: RollbackRecord
-        PE->>WAL: append rollback result
-        PE-->>UI: false
-      end
-    end
-```
+`--reconcile` recupera pendientes al arrancar. No equivale a R para deshacer todos los cambios confirmados. El constructor de `PolicyEngine` realiza esa recuperación una sola vez.
 
-El WAL usa entradas alineadas a 4096 bytes, FNV-1a sobre el payload, marcador final `0xAA` y `FlushFileBuffers`. Eso describe integridad de escritura; no equivale a snapshot completo ni rollback de todos los módulos.
+## Qué contiene una copia de ajustes
 
-Las rutas de registro, Copilot y Edge no modifican DACLs como efecto lateral. La ruta de servicios solo cambia estado de ejecución e inicio; conserva recovery actions y triggers. Cada descriptor o configuración adicional solo podrá cambiarse cuando tenga captura, restauración y estado de conflicto dentro del mismo contrato de recuperación.
+La copia incluye tipo y bytes de valores de registro, vista de Windows, configuración básica de servicios, dependencias y XML de tareas cuando se pueden consultar. Usa la versión real de Windows y se escribe mediante un archivo temporal antes del reemplazo.
 
-La desactivación de tareas exige una acción dentro de `System32` con firma digital válida. El campo `Author` del XML se trata como metadato no confiable y no autoriza una mutación.
+No contiene todo el estado necesario para restaurar Windows. Un ajuste ausente o no accesible no debe confundirse con una copia completa. Por eso la restauración desde esa copia permanece deshabilitada.
 
-## 3. Recuperación y persistencia
+## Dónde está cada responsabilidad
 
-```mermaid
-stateDiagram-v2
-    [*] --> PENDING: append before registry write
-    PENDING --> COMMITTED: registry write and durable log append
-    PENDING --> RECOVERY_APPLIED: startup rollback and durable marker
-    PARTIAL_APPLY --> RECOVERY_APPLIED: startup rollback and durable marker
-    PENDING --> FAILED: rollback error and durable failure marker
-    COMMITTED --> ROLLED_BACK: interactive R
-    FAILED --> [*]
-    RECOVERY_APPLIED --> [*]
-```
+| Archivo | Qué revisar |
+| --- | --- |
+| `src/main.cpp` | Orden de arranque y separación de modos |
+| `include/CLI/ArgumentParser.hpp` | Opciones y ayuda |
+| `include/UI/InteractiveShell.hpp` | Propuesta, confirmación y recuperación del menú |
+| `include/Core/PolicyEngine.hpp` | Guardado y recuperación de cada cambio |
+| `include/Core/StateEngine.hpp` | Captura de ajustes compatibles |
+| `include/Core/RAII.hpp` | Cierre y transferencia de recursos de Windows |
 
-- Constructor de `PolicyEngine` llama una sola vez a `LoadAndRecover`; `--reconcile` termina después de esa recuperación y no aplica mutaciones de servicios o tareas sin snapshot journaled.
-- El parser usa la longitud del payload para localizar el checksum; no interpreta el último separador como si fuera parte del payload.
-- La reconstrucción agrupa los registros por `id` y conserva solo el último estado durable antes de decidir si debe recuperar. El `PENDING` histórico de una transacción que terminó en `COMMITTED` ya no dispara un rollback falso.
-- Tras el rollback de arranque se añade un registro `RECOVERY_APPLIED` o `FAILED`, de modo que el siguiente arranque puede distinguir una recuperación terminada de una que no pudo completarse.
-- La compensación compara el tipo y los bytes del valor actual con `targetType` y `targetData`. Un drift externo produce `FAILED`; no se usa `RegDeleteTree` para borrar cambios que no pertenecen a la transacción.
-- Interactive `R` revierte solo registros marcados `COMMITTED`. Elimina `aegis_wal.jsonl` únicamente si todas las reversiones y sus marcas durables terminan correctamente; si una falla, conserva el journal para otro intento.
-- La tarea automática de `Reinforcement` no se registra: apuntaría a una ruta sin mutaciones de servicios/tareas journaled y no debe sugerir una reconciliación que el WAL no puede revertir.
+Las rutas de registro no cambian permisos como efecto lateral. Los módulos de servicios conservan sus acciones de recuperación y disparadores. Las tareas requieren una acción firmada dentro de System32; el campo Author no autoriza cambios. La tarea automática de refuerzo no se registra mientras carezca de recuperación completa.
 
-## 4. Límite de validación
+## Cómo se comprueba
 
-- `tests/compile_checks.py` valida contratos de repo/CMake; Windows CI valida compilación.
-- No se ha demostrado aquí la ejecución privilegiada sobre registro, servicios, tareas, WFP, firewall o Appx. La comprobación posterior de WFP valida el proveedor que Aegis acaba de registrar; no interpreta un ping externo como prueba de salud.
-- Cualquier futura implementación de `--apply`, Balanced, Aggressive o tarea de auto-reconciliación debe probarse en VM/equipo Windows descartable con recuperación externa. Las rutas actuales las rechazan antes de mutar esos módulos.
+CI compila Debug y Release con advertencias tratadas como errores. Las pruebas nativas comprueban transacciones, recuperación y manejo de recursos de Windows. Compilar estos módulos no demuestra todos sus efectos sobre una instalación real. Las futuras operaciones de servicios, tareas y aplicaciones deben probar su recuperación completa antes de aparecer como disponibles.
+
+[Guía de uso](USO.md) · [Mapa de archivos](REPOSITORY_MAP.md)

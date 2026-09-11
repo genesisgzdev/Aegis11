@@ -1,13 +1,13 @@
 # Mapa del repositorio
 
-Revisión de estructura y flujos: 2026-09-11. Este inventario cubre los archivos versionados y las incorporaciones de esta revisión; excluye dependencias instaladas y artefactos de build. Los límites de validación aparecen por área.
+Usa este índice cuando quieras encontrar una parte del proyecto. Para empezar a usarlo, vuelve al [README](../README.md). Los archivos generados al compilar y las dependencias instaladas quedan fuera del mapa.
 
-## Flujos y fronteras
+## Qué hace cada parte
 
-| Área | Recorrido real | Verificación / límite |
+| Área | Recorrido | Qué conviene comprobar |
 | --- | --- | --- |
-| CLI | ArgumentParser → main → snapshot, simulate, reconcile o menú | Modos excluyentes; EOF termina el menú |
-| Light | políticas de registro → PolicyEngine → WAL PENDING/COMMITTED | Falla de preimagen bloquea aplicación; no sigue aplicando después de un error |
+| CLI | ArgumentParser → main → copia de ajustes, preview, recuperación o menú | Modos excluyentes; EOF termina el menú |
+| Privacidad | políticas de registro → PolicyEngine → WAL PENDING/COMMITTED | Falla de preimagen bloquea aplicación; no sigue aplicando después de un error |
 | Recuperación | WAL framing/checksum → última transición → compensación inversa | Retry conserva conflictos; no borra valores ajenos; CTest usa HKCU temporal real |
 | Snapshot | registro, servicios y tareas → JSON versionado y reemplazo atómico | Error de escritura devuelve fallo; no equivale a restore |
 | Módulos fuera de la ruta activa | servicios/tareas/Appx/WFP/firewall/limpieza | --apply, Balanced y Aggressive permanecen deshabilitados sin rollback completo |
@@ -31,7 +31,6 @@ La librería include/Support/json.hpp es una dependencia vendorizada. El inventa
 | [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) | Documentación: ARCHITECTURE |
 | [docs/REPOSITORY_MAP.md](../docs/REPOSITORY_MAP.md) | Documentación: REPOSITORY_MAP |
 | [include/CLI/ArgumentParser.hpp](../include/CLI/ArgumentParser.hpp) | Componente nativo: ArgumentParser |
-| [include/CLI/InteractiveMenu.hpp](../include/CLI/InteractiveMenu.hpp) | Componente nativo: InteractiveMenu |
 | [include/Core/Logger.hpp](../include/Core/Logger.hpp) | Componente nativo: Logger |
 | [include/Core/Obfuscation.hpp](../include/Core/Obfuscation.hpp) | Componente nativo: Obfuscation |
 | [include/Core/PolicyEngine.hpp](../include/Core/PolicyEngine.hpp) | Componente nativo: PolicyEngine |
@@ -62,3 +61,5 @@ La librería include/Support/json.hpp es una dependencia vendorizada. El inventa
 | [src/main.cpp](../src/main.cpp) | Componente nativo: main |
 | [tests/compile_checks.py](../tests/compile_checks.py) | Validación: compile_checks |
 | [tests/policy_runtime.cpp](../tests/policy_runtime.cpp) | Validación: policy_runtime |
+| [docs/USO.md](../docs/USO.md) | Guía para decidir y recuperar ajustes |
+| [tests/argument_parser_runtime.cpp](../tests/argument_parser_runtime.cpp) | Comprueba los alias de consulta y el rechazo de modos incompatibles |
