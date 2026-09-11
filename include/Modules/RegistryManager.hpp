@@ -3,6 +3,7 @@
 #include "../Core/Logger.hpp"
 #include "../Core/Obfuscation.hpp"
 #include "../Core/State.hpp"
+#include "../Core/Utils.hpp"
 #include <windows.h>
 #include <string>
 #include <map>
@@ -59,7 +60,7 @@ namespace Aegis::Modules {
                     if (!dryRun) {
                         RegSetValueExW(hk.get(), k.c_str(), 0, REG_DWORD, (const BYTE*)&tv, sizeof(tv));
                     } else {
-                        log.Log(Core::LogLevel::INFO, "DRY-RUN", "Would set and LOCK policy: " + std::string(k.begin(), k.end()));
+                        log.Log(Core::LogLevel::INFO, "DRY-RUN", "Would set policy: " + Core::Utils::ws2s(k));
                     }
                 }
             };

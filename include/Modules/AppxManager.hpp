@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "../Core/RAII.hpp"
 #include "../Core/Logger.hpp"
+#include "../Core/Utils.hpp"
 #include <windows.h>
 #include <tlhelp32.h>
 #include <roapi.h>
@@ -99,9 +100,9 @@ namespace Aegis::Modules {
 
             for (const auto& app : targets) {
                 if (RemovePackageNative(app)) {
-                    log.Log(Core::LogLevel::INFO, "APPX", 200, "Successfully removed: " + std::string(app.begin(), app.end()));
+                    log.Log(Core::LogLevel::INFO, "APPX", 200, "Successfully removed: " + Core::Utils::ws2s(app));
                 } else {
-                    log.Log(Core::LogLevel::WARN, "APPX", 401, "Package not found or locked: " + std::string(app.begin(), app.end()));
+                    log.Log(Core::LogLevel::WARN, "APPX", 401, "Package not found or locked: " + Core::Utils::ws2s(app));
                 }
             }
         }
