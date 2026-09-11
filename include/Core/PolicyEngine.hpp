@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "RAII.hpp"
 #include "Logger.hpp"
 #include "Utils.hpp"
@@ -40,20 +40,21 @@ namespace Aegis::Core {
     };
 
     struct TransactionRecord {
-        uint64_t sequence_number;
-        uint64_t key_fingerprint;
+        uint64_t sequence_number = 0;
+        uint64_t key_fingerprint = 0;
         std::string engine_version = AEGIS_ENGINE_VERSION;
         std::string policy_version = "v1.0";
         std::string id;
         std::string name;
-        uint64_t rootHive;
+        uint64_t rootHive = 0;
         std::string path;
         std::string key;
-        TxState state;
-        bool keyExistedBefore;
-        bool valueExistedBefore;
-        uint32_t originalType;
+        TxState state = TxState::PENDING;
+        bool keyExistedBefore = false;
+        bool valueExistedBefore = false;
+        uint32_t originalType = REG_NONE;
         std::vector<BYTE> originalData;
+        uint32_t targetType = REG_BINARY;
         std::vector<BYTE> targetData;
 
         json to_json() const {
@@ -62,12 +63,12 @@ namespace Aegis::Core {
                 {"eng_v", engine_version}, {"pol_v", policy_version}, {"rootHive", rootHive}, 
                 {"path", path}, {"key", key}, {"state", static_cast<int>(state)}, {"keyExistedBefore", keyExistedBefore},
                 {"valueExistedBefore", valueExistedBefore}, {"originalType", originalType},
-                {"originalData", originalData}, {"targetData", targetData}
+                {"originalData", originalData}, {"targetType", targetType}, {"targetData", targetData}
             };
         }
 
         static TransactionRecord from_json(const json& j) {
-            TransactionRecord tx;
+            TransactionRecord tx{};
             tx.sequence_number = j.value("seq", 0ULL);
             tx.key_fingerprint = j.value("fpr", 0ULL);
             tx.engine_version = j.value("eng_v", "legacy");
@@ -78,6 +79,7 @@ namespace Aegis::Core {
             tx.keyExistedBefore = j.value("keyExistedBefore", false);
             tx.valueExistedBefore = j.value("valueExistedBefore", false);
             tx.originalType = j.value("originalType", 0U);
+            tx.targetType = j.value("targetType", REG_BINARY);
             tx.originalData = j.value("originalData", std::vector<BYTE>());
             tx.targetData = j.value("targetData", std::vector<BYTE>());
             return tx;
@@ -170,7 +172,7 @@ namespace Aegis::Core {
             }
             
             // Sequence-guaranteed sorting for deterministic WAL replay.
-            std::sort(journal.begin(), journal.end(), [](const TransactionRecord& a, const TransactionRecord& b) {
+            std::stable_sort(journal.begin(), journal.end(), [](const TransactionRecord& a, const TransactionRecord& b) {
                 return a.sequence_number < b.sequence_number;
             });
 
@@ -194,13 +196,14 @@ namespace Aegis::Core {
                 }
             }
             journal = std::move(latest);
-            std::sort(journal.begin(), journal.end(), [](const TransactionRecord& a, const TransactionRecord& b) {
+            std::stable_sort(journal.begin(), journal.end(), [](const TransactionRecord& a, const TransactionRecord& b) {
                 return a.sequence_number < b.sequence_number;
             });
 
             // Reconciliation on Startup
-            for (auto& tx : journal) {
-                if (tx.state == TxState::PENDING || tx.state == TxState::PARTIAL_APPLY) {
+            for (auto iterator = journal.rbegin(); iterator != journal.rend(); ++iterator) {
+                auto& tx = *iterator;
+                if (tx.state == TxState::PENDING || tx.state == TxState::PARTIAL_APPLY || tx.state == TxState::FAILED) {
                     log.Log(LogLevel::WARN, "WAL", 301, "Recovery: Reverting incomplete transaction " + tx.name);
                     const bool recovered = RollbackRecord(tx);
                     tx.state = recovered ? TxState::RECOVERY_APPLIED : TxState::FAILED;
@@ -215,31 +218,62 @@ namespace Aegis::Core {
             HKEY root = (HKEY)tx.rootHive;
             std::wstring path = Utils::s2ws(tx.path);
             std::wstring key = Utils::s2ws(tx.key);
-            if (!tx.keyExistedBefore) {
-                const LONG result = RegDeleteTreeW(root, path.c_str());
-                return result == ERROR_SUCCESS || result == ERROR_FILE_NOT_FOUND;
-            } else {
-                HKEY hKey;
-                if (RegOpenKeyExW(root, path.c_str(), 0, KEY_WRITE | KEY_WOW64_64KEY, &hKey) == ERROR_SUCCESS) {
-                    LONG result = ERROR_SUCCESS;
-                    if (tx.valueExistedBefore) {
-                        result = RegSetValueExW(hKey, key.c_str(), 0, tx.originalType, tx.originalData.data(), (DWORD)tx.originalData.size());
-                    } else {
-                        result = RegDeleteValueW(hKey, key.c_str());
-                    }
-                    RegCloseKey(hKey);
-                    return result == ERROR_SUCCESS || result == ERROR_FILE_NOT_FOUND;
-                }
+            HKEY hKey;
+            const LONG openResult = RegOpenKeyExW(root, path.c_str(), 0, KEY_READ | KEY_WRITE | KEY_WOW64_64KEY, &hKey);
+            if (openResult == ERROR_FILE_NOT_FOUND || openResult == ERROR_PATH_NOT_FOUND) {
+                return !tx.keyExistedBefore;
             }
-            return false;
+            if (openResult != ERROR_SUCCESS) return false;
+
+            DWORD currentType = 0;
+            DWORD currentSize = 0;
+            const LONG querySize = RegQueryValueExW(hKey, key.c_str(), nullptr, &currentType, nullptr, &currentSize);
+            if (querySize == ERROR_FILE_NOT_FOUND) {
+                RegCloseKey(hKey);
+                return !tx.valueExistedBefore;
+            }
+            if (querySize != ERROR_SUCCESS) {
+                RegCloseKey(hKey);
+                return false;
+            }
+
+            std::vector<BYTE> currentData(currentSize);
+            const LONG queryData = RegQueryValueExW(hKey, key.c_str(), nullptr, &currentType, currentData.data(), &currentSize);
+            if (queryData == ERROR_SUCCESS && tx.valueExistedBefore &&
+                currentType == tx.originalType && currentSize == tx.originalData.size() &&
+                (currentSize == 0 || memcmp(currentData.data(), tx.originalData.data(), currentSize) == 0)) {
+                RegCloseKey(hKey);
+                return true; // A previous compensation already restored this value.
+            }
+            if (queryData != ERROR_SUCCESS || currentType != tx.targetType || currentSize != tx.targetData.size() ||
+                (currentSize != 0 && memcmp(currentData.data(), tx.targetData.data(), currentSize) != 0)) {
+                // Do not overwrite a value that changed after this transaction.
+                RegCloseKey(hKey);
+                return false;
+            }
+
+            LONG result = ERROR_SUCCESS;
+            if (tx.keyExistedBefore) {
+                if (tx.valueExistedBefore) {
+                    result = RegSetValueExW(hKey, key.c_str(), 0, tx.originalType, tx.originalData.data(), (DWORD)tx.originalData.size());
+                } else {
+                    result = RegDeleteValueW(hKey, key.c_str());
+                }
+            } else {
+                // Remove only the value created by this transaction. The key is
+                // retained to avoid deleting unrelated concurrent changes.
+                result = RegDeleteValueW(hKey, key.c_str());
+            }
+            RegCloseKey(hKey);
+            if (result != ERROR_SUCCESS && result != ERROR_FILE_NOT_FOUND) return false;
+            // Keep the container key. RegDeleteKey deletes other values too,
+            // and an emptiness check followed by deletion races other writers.
+            // Recovery owns the recorded value, never unrelated key contents.
+            return true;
         }
 
         bool ApplyPolicy(PolicyDefinition def) {
-            if (def.multiUser && def.rootHive == HKEY_CURRENT_USER) {
-                // In production, this intention delegates to RegistryManager::ApplyToOfflineHives for disconnected SIDs
-            }
-
-            TransactionRecord tx;
+            TransactionRecord tx{};
             tx.sequence_number = ++current_sequence;
             // Sequence numbers are already durable and monotonic. Using the
             // clock alone can collide when two policies start in one tick,
@@ -251,19 +285,45 @@ namespace Aegis::Core {
             tx.key = Utils::ws2s(def.key);
             tx.key_fingerprint = Utils::FNV1a64(tx.path + "\\" + tx.key);
             tx.state = TxState::PENDING;
+            switch (def.type) {
+                case RegType::DWORD: tx.targetType = REG_DWORD; break;
+                case RegType::QWORD: tx.targetType = REG_QWORD; break;
+                case RegType::SZ: tx.targetType = REG_SZ; break;
+                case RegType::EXPAND_SZ: tx.targetType = REG_EXPAND_SZ; break;
+                case RegType::MULTI_SZ: tx.targetType = REG_MULTI_SZ; break;
+                case RegType::BINARY: tx.targetType = REG_BINARY; break;
+            }
             tx.targetData = def.targetData;
 
             HKEY hKey;
-            if (RegOpenKeyExW(def.rootHive, def.path.c_str(), 0, KEY_READ | KEY_WOW64_64KEY, &hKey) == ERROR_SUCCESS) {
+            const LONG readOpen = RegOpenKeyExW(def.rootHive, def.path.c_str(), 0, KEY_READ | KEY_WOW64_64KEY, &hKey);
+            if (readOpen != ERROR_SUCCESS && readOpen != ERROR_FILE_NOT_FOUND && readOpen != ERROR_PATH_NOT_FOUND) {
+                log.Log(LogLevel::ERR, "WAL", 313, "Cannot read the original registry state; policy was not applied.");
+                return false;
+            }
+            if (readOpen == ERROR_SUCCESS) {
                 tx.keyExistedBefore = true;
                 DWORD type = 0, size = 0;
-                if (RegQueryValueExW(hKey, def.key.c_str(), nullptr, &type, nullptr, &size) == ERROR_SUCCESS) {
+                const LONG readSize = RegQueryValueExW(hKey, def.key.c_str(), nullptr, &type, nullptr, &size);
+                if (readSize != ERROR_SUCCESS && readSize != ERROR_FILE_NOT_FOUND) {
+                    RegCloseKey(hKey);
+                    return false;
+                }
+                if (readSize == ERROR_SUCCESS) {
                     tx.valueExistedBefore = true;
                     tx.originalType = type;
                     tx.originalData.resize(size);
-                    RegQueryValueExW(hKey, def.key.c_str(), nullptr, &type, tx.originalData.data(), &size);
-                    
-                    if (def.targetData.size() == size && memcmp(def.targetData.data(), tx.originalData.data(), size) == 0) {
+                    const LONG readData = RegQueryValueExW(hKey, def.key.c_str(), nullptr, &type,
+                        tx.originalData.empty() ? nullptr : tx.originalData.data(), &size);
+                    if (readData != ERROR_SUCCESS) {
+                        RegCloseKey(hKey);
+                        return false;
+                    }
+                    tx.originalType = type;
+                    tx.originalData.resize(size);
+
+                    if (type == tx.targetType && def.targetData.size() == size &&
+                        memcmp(def.targetData.data(), tx.originalData.data(), size) == 0) {
                         RegCloseKey(hKey);
                         return true; 
                     }
@@ -301,16 +361,57 @@ namespace Aegis::Core {
                     return false;
                 }
                 RegCloseKey(hKey);
+                // The mutation did not reach the requested value. Record the
+                // partial state and compensate before returning so the current
+                // process does not continue with an untracked registry change.
+                journal.back().state = TxState::PARTIAL_APPLY;
+                AtomicAppendJournal(journal.back());
+                const bool rolledBack = RollbackRecord(journal.back());
+                journal.back().state = rolledBack ? TxState::ROLLED_BACK : TxState::FAILED;
+                if (!AtomicAppendJournal(journal.back())) {
+                    log.Log(LogLevel::ERR, "WAL", 307, "Unable to persist the registry write failure result.");
+                }
+                return false;
+            }
+            // A pending record must not be left as the only durable outcome
+            // when the target key could not be opened or created.
+            journal.back().state = TxState::FAILED;
+            if (!AtomicAppendJournal(journal.back())) {
+                log.Log(LogLevel::ERR, "WAL", 308, "Unable to persist the registry open failure result.");
             }
             return false;
         }
 
-        void RollbackAll() {
+        bool RollbackAll() {
+            bool allRolledBack = true;
             for (auto it = journal.rbegin(); it != journal.rend(); ++it) {
-                if (it->state == TxState::COMMITTED) RollbackRecord(*it);
+                if (it->state == TxState::ROLLED_BACK || it->state == TxState::RECOVERY_APPLIED) continue;
+                if (!RollbackRecord(*it)) {
+                    allRolledBack = false;
+                    it->state = TxState::FAILED;
+                    if (!AtomicAppendJournal(*it)) {
+                        log.Log(LogLevel::ERR, "WAL", 309, "Unable to persist an interactive rollback failure.");
+                    }
+                    continue;
+                }
+                it->state = TxState::ROLLED_BACK;
+                if (!AtomicAppendJournal(*it)) {
+                    allRolledBack = false;
+                    log.Log(LogLevel::ERR, "WAL", 310, "Unable to persist an interactive rollback result.");
+                }
+            }
+            if (!allRolledBack) {
+                log.Log(LogLevel::ERR, "WAL", 311, "Rollback incomplete; the WAL was retained for another recovery attempt.");
+                return false;
+            }
+            std::error_code removeError;
+            const bool removed = std::filesystem::remove(journalPath, removeError);
+            if (removeError || (!removed && std::filesystem::exists(journalPath))) {
+                log.Log(LogLevel::ERR, "WAL", 312, "Rollback completed but the WAL could not be removed.");
+                return false;
             }
             journal.clear();
-            std::filesystem::remove(journalPath);
+            return true;
         }
     };
 }

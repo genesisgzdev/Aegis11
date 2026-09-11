@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "../Core/Logger.hpp"
 #include "../Core/PolicyEngine.hpp"
 #include "../Core/SysInfo.hpp"
@@ -38,8 +38,8 @@ namespace Aegis::UI {
         void PrintMenu() {
             std::cout << "\n Mitigation Presets:\n";
             std::cout << "  [1] Light (Safe GPOs, No App removal)\n";
-            std::cout << "  [2] Balanced (GPOs, Services, Tasks, Edge/OneDrive)\n";
-            std::cout << "  [3] Aggressive (Balanced, Appx Removal, WFP Kernel Block, FW COM)\n";
+            std::cout << "  [2] Balanced (reservado: no hay rollback entre módulos)\n";
+            std::cout << "  [3] Aggressive (reservado: incluye operaciones irreversibles)\n";
             std::cout << "  [R] Rollback WAL Database\n";
             std::cout << "  [0] Exit\n\n> ";
         }
@@ -57,7 +57,7 @@ namespace Aegis::UI {
 
         bool ConfirmExecution(const std::vector<Core::PolicyDefinition>& policies, const std::string& profile) {
             std::cout << "\n--- EXECUTION DIFF PREVIEW: " << profile << " ---\n";
-            
+
             // Real Diff Generation for Registry GPOs
             for (const auto& p : policies) {
                 HKEY hKey;
@@ -89,15 +89,15 @@ namespace Aegis::UI {
                 std::cout << " [COM] Will spawn native Appx removal operations\n";
                 std::cout << " [WFP] Will commit Network Layer block for telemetry endpoints\n";
             }
-            
-            std::cout << "\nType 'YES' to authorize atomic execution: ";
+
+            std::cout << "\nType 'YES' to authorize the journaled registry profile: ";
             std::string ans; std::cin >> ans;
             return (ans == "YES");
         }
 
     public:
         InteractiveShell(Core::Logger& l, Core::PolicyEngine& e, Modules::AppxManager& am, Modules::TaskManager& tm, Modules::NetworkWfp& nw,
-                         Modules::ServiceManager& sm, Modules::FirewallManager& fm, Modules::DataPurge& dp, Modules::NetworkOptimizer& no) 
+                         Modules::ServiceManager& sm, Modules::FirewallManager& fm, Modules::DataPurge& dp, Modules::NetworkOptimizer& no)
             : log(l), engine(e), appx(am), tasks(tm), wfp(nw), svc(sm), fw(fm), data(dp), netOpt(no) {}
 
         void Run() {
@@ -105,44 +105,44 @@ namespace Aegis::UI {
             while (running) {
                 Core::Utils::ClearScreen();
                 PrintInfo();
-                
+
                 if (Core::ProcessHost::CurrentState == Core::AppState::RECOVERY) {
                     std::cout << "[!] SYSTEM IN RECOVERY STATE. Run Rollback [R] before applying new policies.\n";
                 }
 
                 PrintMenu();
                 char choice;
-                if (!(std::cin >> choice)) { std::cin.clear(); std::cin.ignore(10000, '\n'); continue; }
-                
+                if (!(std::cin >> choice)) {
+                    if (std::cin.eof()) break;
+                    std::cin.clear(); std::cin.ignore(10000, '\n'); continue;
+                }
+
                 auto basePols = GetBasePolicies();
                 switch (choice) {
-                    case '1': 
+                    case '1':
                         if (ConfirmExecution(basePols, "LIGHT")) {
-                            for (const auto& p : basePols) engine.ApplyPolicy(p); 
+                            for (const auto& p : basePols) {
+                                if (!engine.ApplyPolicy(p)) {
+                                    std::cout << "[!] Policy failed. Remaining changes were not applied; inspect the WAL and recovery state.\n";
+                                    break;
+                                }
+                            }
                         }
                         break;
-                    case '2': 
-                        if (ConfirmExecution(basePols, "BALANCED")) {
-                            for (const auto& p : basePols) engine.ApplyPolicy(p);
-                            svc.EnforcePolicy(false);
-                            tasks.DisableTelemetryTasks();
-                            appx.RemoveEdgeAndOneDrive();
+                    case '2':
+                        std::cout << "[!] Balanced is disabled: service, task and Appx mutations do not yet share a journaled rollback plan.\n";
+                        break;
+                    case '3':
+                        std::cout << "[!] Aggressive is disabled: it includes non-journaled and potentially irreversible operations.\n";
+                        break;
+                    case 'r': case 'R':
+                        if (engine.RollbackAll()) {
+                            Core::ProcessHost::CurrentState = Core::AppState::NORMAL;
+                        } else {
+                            Core::ProcessHost::CurrentState = Core::AppState::RECOVERY;
+                            std::cout << "[!] Rollback incomplete. The WAL was retained for another attempt.\n";
                         }
                         break;
-                    case '3': 
-                        if (ConfirmExecution(basePols, "AGGRESSIVE")) {
-                            for (const auto& p : basePols) engine.ApplyPolicy(p);
-                            svc.EnforcePolicy(false);
-                            tasks.DisableTelemetryTasks();
-                            fw.EnforceBlockRules(false);
-                            wfp.EnforceHardBlock(false);
-                            appx.RemoveEdgeAndOneDrive();
-                            appx.RemoveBloatware(true);
-                            data.Execute(false);
-                            netOpt.UniversalHardening();
-                        }
-                        break;
-                    case 'r': case 'R': engine.RollbackAll(); Core::ProcessHost::CurrentState = Core::AppState::NORMAL; break;
                     case '0': running = false; break;
                 }
                 if(running) { std::cout << "\nOperation Complete. Press Enter to return..."; std::cin.ignore(); std::cin.get(); }

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "RAII.hpp"
 #include "Logger.hpp"
 #include <windows.h>
@@ -16,6 +16,10 @@ namespace Aegis::Core {
         static bool EnforceSingleInstance() {
             hMutex = CreateMutexW(NULL, TRUE, L"Global\\Aegis11_Controller_Mutex");
             DWORD err = GetLastError();
+            if (!hMutex) {
+                std::cerr << "[!] Cannot acquire the controller mutex: " << err << "\n";
+                return false;
+            }
             if (err == ERROR_ALREADY_EXISTS) {
                 std::cout << "[!] FATAL: Aegis11 is already running.\n";
                 CloseHandle(hMutex); hMutex = NULL; return false;

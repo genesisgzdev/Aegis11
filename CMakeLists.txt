@@ -36,3 +36,11 @@ add_test(
     NAME repository_compile_checks
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/compile_checks.py"
 )
+
+if(BUILD_TESTING)
+    add_executable(policy_runtime_tests tests/policy_runtime.cpp)
+    target_include_directories(policy_runtime_tests PRIVATE include)
+    target_compile_definitions(policy_runtime_tests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_link_libraries(policy_runtime_tests PRIVATE advapi32 wintrust ole32)
+    add_test(NAME native_policy_recovery COMMAND policy_runtime_tests)
+endif()

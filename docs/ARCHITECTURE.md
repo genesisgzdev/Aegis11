@@ -8,32 +8,32 @@ La primera figura es un mapa de modos, no una promesa de que todos los módulos 
 
 ## 1. Enrutamiento por modo
 
-~~~mermaid
+```mermaid
 flowchart TD
     MAIN[main program] --> P[argument parser]
     P -->|invalid/help| EXIT[exit 2 or 0]
     P -->|--simulate| DRY[ServiceManager dry-run]
-    P -->|--apply| APPLY[ServiceManager fixed service list]
+    P -->|--apply| APPLY["reject: no journal parity"]
     P -->|--reconcile| REC[PolicyEngine LoadAndRecover]
-    REC --> S[ServiceManager apply]
-    REC --> T[TaskManager disable two known tasks]
+    REC --> SAFE[No unjournaled mutation]
     P -->|no args or --interactive| UI[InteractiveShell]
     P -->|--snapshot| SNAP[StateController read supported state]
     UI --> L[Light registry writes]
-    UI --> B[Balanced registry services tasks and apps]
-    UI --> A[Aggressive WFP firewall apps purge and network]
-    UI --> W[Reinforcement servicing event task]
-~~~
+    UI --> B["Balanced rejected: no cross-module rollback parity"]
+    UI --> A["Aggressive rejected: non-journaled or irreversible operations"]
+```
 
-`--snapshot <file.json>` conecta `main.cpp` con `StateController` y escribe el baseline de los servicios, tareas y valores de registro que tienen captura implementada. `--restore` sigue rechazado con exit code 3; el archivo no se presenta como mecanismo de rollback.
+`--snapshot <file.json>` conecta `main.cpp` con `StateController` y escribe el baseline de los servicios, tareas y valores de registro que tienen captura implementada. El esquema versionado conserva tipo y bytes de registro, vista de Windows, configuración básica del servicio, dependencias y XML de la tarea cuando el sistema los devuelve. `--restore` sigue rechazado con exit code 3; el archivo no se presenta como mecanismo de rollback.
 
 El parser acepta un solo modo operativo por invocación. La ruta de snapshot, simulate y apply se resuelve antes de construir `PolicyEngine`, porque su constructor carga el WAL y puede iniciar recuperación; una captura no debe entrar en esa ruta como efecto lateral.
 
 El snapshot toma la versión y build mediante `SysInfo::GetCapabilities` y serializa primero un archivo temporal. `MoveFileExW` lo reemplaza con `MOVEFILE_WRITE_THROUGH`; si la serialización o el reemplazo falla, se elimina el temporal y no se presenta un baseline parcial como válido.
 
+El esquema no afirma que todos los módulos estén cubiertos: una entrada puede marcar `exists: false`, y un módulo puede no producir entradas si Windows no permite consultarlo. La captura es evidencia para diseñar el contrato de restore, no autorización para mutar ni garantía de que el estado pueda restaurarse todavía.
+
 ## 2. Transacción de política de registro
 
-~~~mermaid
+```mermaid
 sequenceDiagram
     participant UI as InteractiveShell
     participant PE as PolicyEngine
@@ -50,17 +50,23 @@ sequenceDiagram
         PE->>WAL: append committed record and flush
         PE-->>UI: true
       else write or durable commit fails
+        PE->>WAL: append partial or failed result
         PE->>REG: RollbackRecord
+        PE->>WAL: append rollback result
         PE-->>UI: false
       end
     end
-~~~
+```
 
 El WAL usa entradas alineadas a 4096 bytes, FNV-1a sobre el payload, marcador final `0xAA` y `FlushFileBuffers`. Eso describe integridad de escritura; no equivale a snapshot completo ni rollback de todos los módulos.
 
+Las rutas de registro, Copilot y Edge no modifican DACLs como efecto lateral. La ruta de servicios solo cambia estado de ejecución e inicio; conserva recovery actions y triggers. Cada descriptor o configuración adicional solo podrá cambiarse cuando tenga captura, restauración y estado de conflicto dentro del mismo contrato de recuperación.
+
+La desactivación de tareas exige una acción dentro de `System32` con firma digital válida. El campo `Author` del XML se trata como metadato no confiable y no autoriza una mutación.
+
 ## 3. Recuperación y persistencia
 
-~~~mermaid
+```mermaid
 stateDiagram-v2
     [*] --> PENDING: append before registry write
     PENDING --> COMMITTED: registry write and durable log append
@@ -70,17 +76,18 @@ stateDiagram-v2
     COMMITTED --> ROLLED_BACK: interactive R
     FAILED --> [*]
     RECOVERY_APPLIED --> [*]
-~~~
+```
 
-- Constructor de `PolicyEngine` llama `LoadAndRecover`; `--reconcile` lo vuelve a llamar antes de ejecutar servicios y tareas.
+- Constructor de `PolicyEngine` llama una sola vez a `LoadAndRecover`; `--reconcile` termina después de esa recuperación y no aplica mutaciones de servicios o tareas sin snapshot journaled.
 - El parser usa la longitud del payload para localizar el checksum; no interpreta el último separador como si fuera parte del payload.
 - La reconstrucción agrupa los registros por `id` y conserva solo el último estado durable antes de decidir si debe recuperar. El `PENDING` histórico de una transacción que terminó en `COMMITTED` ya no dispara un rollback falso.
 - Tras el rollback de arranque se añade un registro `RECOVERY_APPLIED` o `FAILED`, de modo que el siguiente arranque puede distinguir una recuperación terminada de una que no pudo completarse.
-- Interactive `R` revierte solo registros marcados `COMMITTED` y elimina `aegis_wal.jsonl`.
-- `Reinforcement` se registra solo desde la ruta interactiva y dispara por eventos de servicing de Windows con argumento `--reconcile`. La tarea se limita a cinco minutos y usa `TASK_INSTANCES_IGNORE_NEW`; no mantiene un proceso residente ni acumula ejecuciones concurrentes.
+- La compensación compara el tipo y los bytes del valor actual con `targetType` y `targetData`. Un drift externo produce `FAILED`; no se usa `RegDeleteTree` para borrar cambios que no pertenecen a la transacción.
+- Interactive `R` revierte solo registros marcados `COMMITTED`. Elimina `aegis_wal.jsonl` únicamente si todas las reversiones y sus marcas durables terminan correctamente; si una falla, conserva el journal para otro intento.
+- La tarea automática de `Reinforcement` no se registra: apuntaría a una ruta sin mutaciones de servicios/tareas journaled y no debe sugerir una reconciliación que el WAL no puede revertir.
 
 ## 4. Límite de validación
 
 - `tests/compile_checks.py` valida contratos de repo/CMake; Windows CI valida compilación.
-- No se ha demostrado aquí la ejecución privilegiada sobre registro, servicios, tareas, WFP, firewall o Appx.
-- Cualquier prueba de `--apply`, perfil Aggressive o tarea de auto-reconciliación debe ejecutarse en VM/equipo Windows descartable con recuperación externa.
+- No se ha demostrado aquí la ejecución privilegiada sobre registro, servicios, tareas, WFP, firewall o Appx. La comprobación posterior de WFP valida el proveedor que Aegis acaba de registrar; no interpreta un ping externo como prueba de salud.
+- Cualquier futura implementación de `--apply`, Balanced, Aggressive o tarea de auto-reconciliación debe probarse en VM/equipo Windows descartable con recuperación externa. Las rutas actuales las rechazan antes de mutar esos módulos.

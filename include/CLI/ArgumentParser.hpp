@@ -60,7 +60,7 @@ namespace Aegis::CLI {
             std::cout << "  --apply                  Apply the Aegis Security Policy to the system.\n";
             std::cout << "  --simulate               Perform a dry-run of the policy application.\n";
             std::cout << "  --restore <file.json>    Reserved; restore from a baseline is not implemented.\n";
-            std::cout << "  --reconcile              Recover the WAL and re-apply service/task checks.\n";
+            std::cout << "  --reconcile              Recover the WAL without unjournaled service/task mutations.\n";
             std::cout << "  --help                   Show this menu.\n";
         }
     };
