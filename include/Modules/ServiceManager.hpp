@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "../Core/RAII.hpp"
 #include "../Core/Logger.hpp"
 #include "../Core/State.hpp"
@@ -63,20 +63,63 @@ namespace Aegis::Modules {
             }
         }
 
+        bool Restore(const Core::ServiceState& desired) {
+            const std::wstring name = Core::Utils::s2ws(desired.name);
+            ScHandle hSCM(OpenSCManagerW(NULL, NULL, SC_MANAGER_CONNECT | SC_MANAGER_ENUMERATE_SERVICE));
+            if (!hSCM) {
+                log.Log(Core::LogLevel::ERR, "SVC", 500, "Cannot open service control manager for restore.");
+                return false;
+            }
+            ScHandle service(OpenServiceW(hSCM.get(), name.c_str(),
+                SERVICE_QUERY_CONFIG | SERVICE_QUERY_STATUS | SERVICE_CHANGE_CONFIG | SERVICE_START | SERVICE_STOP));
+            if (!service) {
+                log.Log(Core::LogLevel::ERR, "SVC", 501, "Restore refused: service is absent and creation is out of snapshot scope: " + desired.name);
+                return false;
+            }
+            DWORD bytes = 0;
+            QueryServiceConfigW(service.get(), nullptr, 0, &bytes);
+            if (!bytes) return false;
+            std::vector<BYTE> buffer(bytes);
+            auto* config = reinterpret_cast<LPQUERY_SERVICE_CONFIGW>(buffer.data());
+            if (!QueryServiceConfigW(service.get(), config, bytes, &bytes)) return false;
+            const std::string liveBinary = config->lpBinaryPathName ? Core::Utils::ws2s(config->lpBinaryPathName) : "";
+            if (liveBinary != desired.binaryPath) {
+                log.Log(Core::LogLevel::ERR, "SVC", 502, "Restore refused: binary path drifted for " + desired.name);
+                return false;
+            }
+            const std::wstring group = Core::Utils::s2ws(desired.loadOrderGroup);
+            const std::wstring account = Core::Utils::s2ws(desired.accountName);
+            std::wstring deps;
+            for (const auto& dependency : desired.dependencies) {
+                deps += Core::Utils::s2ws(dependency);
+                deps.push_back(L'\0');
+            }
+            deps.push_back(L'\0');
+            if (!ChangeServiceConfigW(service.get(), desired.serviceType, desired.startType, desired.errorControl,
+                    NULL, group.empty() ? NULL : group.c_str(), NULL, deps.c_str(),
+                    account.empty() ? NULL : account.c_str(), NULL, NULL)) {
+                log.Log(Core::LogLevel::ERR, "SVC", 503, "Restore failed to write service configuration: " + desired.name);
+                return false;
+            }
+            SERVICE_STATUS status{};
+            if (!QueryServiceStatus(service.get(), &status)) return false;
+            if (desired.currentState == SERVICE_STOPPED && status.dwCurrentState != SERVICE_STOPPED) {
+                ControlService(service.get(), SERVICE_CONTROL_STOP, &status);
+            } else if (desired.currentState == SERVICE_RUNNING && status.dwCurrentState != SERVICE_RUNNING) {
+                StartServiceW(service.get(), 0, nullptr);
+            }
+            log.Log(Core::LogLevel::INFO, "SVC", 210, "Restored journaled service configuration: " + desired.name);
+            return true;
+        }
+
         void NeutralizeService(const std::wstring& name) {
             ScHandle hSCM(OpenSCManagerW(NULL, NULL, SC_MANAGER_ALL_ACCESS));
             if (!hSCM) return;
-
             ScHandle hSvc(OpenServiceW(hSCM.get(), name.c_str(), SERVICE_STOP | SERVICE_CHANGE_CONFIG | SERVICE_QUERY_CONFIG));
             if (!hSvc) return;
-
-            // Only change the running/start state currently represented by the
-            // service snapshot. Recovery actions and trigger definitions are
-            // intentionally preserved until they have a journaled snapshot.
             SERVICE_STATUS ss;
             ControlService(hSvc.get(), SERVICE_CONTROL_STOP, &ss);
             ChangeServiceConfigW(hSvc.get(), SERVICE_NO_CHANGE, SERVICE_DISABLED, SERVICE_NO_CHANGE, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-            
             log.Log(Core::LogLevel::INFO, "SVC", 200, "Neutralized service and preserved recovery configuration: " + Core::Utils::ws2s(name));
         }
 

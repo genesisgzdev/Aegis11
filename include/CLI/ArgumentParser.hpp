@@ -19,8 +19,7 @@ namespace Aegis::CLI {
     public:
         static RunConfig Parse(int argc, char* argv[]) {
             RunConfig config;
-            
-            // If no arguments passed (e.g., double-clicked from Explorer), enter Interactive Mode
+
             if (argc == 1) {
                 config.interactive = true;
                 return config;
@@ -56,10 +55,12 @@ namespace Aegis::CLI {
             std::cout << "  --interactive           Abrir el menu\n";
             std::cout << "  --preview               Ver el plan de servicios sin cambiar nada\n";
             std::cout << "  --snapshot archivo.json Guardar los ajustes compatibles para compararlos\n";
+            std::cout << "  --restore archivo.json  Restaurar registro, servicios y tareas capturados\n";
             std::cout << "  --reconcile             Recuperar cambios del registro guardados por Aegis\n";
             std::cout << "  --help                  Mostrar esta ayuda\n\n";
             std::cout << "La copia de ajustes no es una copia completa de Windows.\n";
-            std::cout << "--apply y --restore no estan disponibles. --simulate sigue siendo alias de --preview.\n";
+            std::cout << "DataPurge y Appx quedan fuera de --restore. --apply permanece deshabilitado.\n";
+            std::cout << "--simulate sigue siendo alias de --preview.\n";
         }
     };
 }
