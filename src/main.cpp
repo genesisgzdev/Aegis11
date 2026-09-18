@@ -39,7 +39,6 @@ int main(int argc, char* argv[]) {
         return 2;
     }
 
-    // Initialize Windows Runtime (WinRT) for In-Process isolation of the PackageManager COM Interface
     HRESULT hrRo = RoInitialize(RO_INIT_MULTITHREADED);
     if (FAILED(hrRo)) {
         std::cout << "[!] Warning: WinRT Subsystem failed to initialize. Modern Appx logic may be degraded.\n";
@@ -50,7 +49,6 @@ int main(int argc, char* argv[]) {
     RegistryManager rm(log);
     ServiceManager sm(log);
 
-    // CLI Parameter Handling
     if (runConfig.simulate) {
         sm.EnforcePolicy(true);
         return 0;
@@ -64,8 +62,9 @@ int main(int argc, char* argv[]) {
         return state.CreateBaseline(runConfig.snapshot_file) ? 0 : 1;
     }
     if (!runConfig.restore_file.empty()) {
-        std::cerr << "[!] Restore is not implemented; refusing to claim a rollback from a baseline file.\n";
-        return 3;
+        PolicyEngine engine(log);
+        Aegis::Engine::StateController state(log, sm, rm, tm);
+        return state.RestoreBaseline(runConfig.restore_file, engine) ? 0 : 1;
     }
 
     PolicyEngine engine(log);
@@ -78,9 +77,6 @@ int main(int argc, char* argv[]) {
     if (runConfig.reconcile) {
         log.SetTraceId("RECONCILE");
         log.Log(LogLevel::INFO, "SYS", 100, "Automated Reconciliation Triggered.");
-        // PolicyEngine already loads and recovers the durable journal in its
-        // constructor. Services and tasks are not changed here because their
-        // rollback-complete snapshots are not yet part of the WAL.
         return 0;
     }
 
