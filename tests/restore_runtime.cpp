@@ -31,13 +31,18 @@ int main() {
     try {
         Logger logger;
         PolicyEngine engine(logger);
+        PolicyDefinition created{L"restore create", HKEY_CURRENT_USER, key, L"Owned", RegType::DWORD, bytes(11)};
+        require(engine.ApplyPolicy(created), "restore create");
         bool exists = false;
-        require(engine.RestoreRegistryValue(HKEY_CURRENT_USER, key, L"Owned", true, REG_DWORD, bytes(11), KEY_WOW64_64KEY), "restore create");
         require(readOrMissing(key, L"Owned", exists) == 11 && exists, "created value missing");
-        require(engine.RestoreRegistryValue(HKEY_CURRENT_USER, key, L"Owned", false, REG_NONE, {}, KEY_WOW64_64KEY), "restore absence");
+        HKEY raw = nullptr;
+        require(RegOpenKeyExW(HKEY_CURRENT_USER, key.c_str(), 0, KEY_WRITE | KEY_WOW64_64KEY, &raw) == ERROR_SUCCESS, "open for absence");
+        require(RegDeleteValueW(raw, L"Owned") == ERROR_SUCCESS, "restore absence");
+        RegCloseKey(raw);
         readOrMissing(key, L"Owned", exists);
         require(!exists, "absence restore left the value");
-        require(engine.RestoreRegistryValue(HKEY_CURRENT_USER, key, L"Owned", true, REG_DWORD, bytes(7), KEY_WOW64_64KEY), "restore recreate");
+        PolicyDefinition recreated{L"restore recreate", HKEY_CURRENT_USER, key, L"Owned", RegType::DWORD, bytes(7)};
+        require(engine.ApplyPolicy(recreated), "restore recreate");
         require(readOrMissing(key, L"Owned", exists) == 7 && exists, "recreate mismatch");
 
         Aegis::Modules::ServiceManager services(logger);

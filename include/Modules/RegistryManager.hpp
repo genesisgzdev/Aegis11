@@ -71,9 +71,32 @@ namespace Aegis::Modules {
         bool Restore(Core::PolicyEngine& engine, const std::string& id, const Core::RegistryState& state) {
             for (const auto& target : PrivacyRegistryTargets()) {
                 if (target.id != id) continue;
-                const REGSAM view = state.view == "32-bit" ? KEY_WOW64_32KEY : KEY_WOW64_64KEY;
-                const std::vector<BYTE> bytes(state.data.begin(), state.data.end());
-                if (!engine.RestoreRegistryValue(target.root, target.path, target.key, state.exists, state.type, bytes, view)) {
+                if (!state.exists) {
+                    HKEY raw = nullptr;
+                    if (RegOpenKeyExW(target.root, target.path.c_str(), 0, KEY_WRITE | target.sam, &raw) != ERROR_SUCCESS) return true;
+                    Core::RegHandle hk = Core::RegHandle::From(raw);
+                    const LONG deleted = RegDeleteValueW(hk.get(), target.key.c_str());
+                    if (deleted != ERROR_SUCCESS && deleted != ERROR_FILE_NOT_FOUND) {
+                        log.Log(Core::LogLevel::ERR, "STATE", "Registry absence restore failed: " + id);
+                        return false;
+                    }
+                    return true;
+                }
+                Core::PolicyDefinition definition{};
+                definition.name = L"snapshot-restore";
+                definition.rootHive = target.root;
+                definition.path = target.path;
+                definition.key = target.key;
+                definition.targetData.assign(state.data.begin(), state.data.end());
+                switch (state.type) {
+                    case REG_DWORD: definition.type = Core::RegType::DWORD; break;
+                    case REG_QWORD: definition.type = Core::RegType::QWORD; break;
+                    case REG_SZ: definition.type = Core::RegType::SZ; break;
+                    case REG_EXPAND_SZ: definition.type = Core::RegType::EXPAND_SZ; break;
+                    case REG_MULTI_SZ: definition.type = Core::RegType::MULTI_SZ; break;
+                    default: definition.type = Core::RegType::BINARY; break;
+                }
+                if (!engine.ApplyPolicy(definition)) {
                     log.Log(Core::LogLevel::ERR, "STATE", "Registry restore failed: " + id);
                     return false;
                 }
@@ -102,7 +125,6 @@ namespace Aegis::Modules {
                     }
                 }
             };
-
             apply(HKEY_LOCAL_MACHINE, _X("SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection"), _X("AllowTelemetry"), 0);
             apply(HKEY_LOCAL_MACHINE, _X("SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection"), _X("DisableDiagnosticDataViewer"), 1);
             apply(HKEY_LOCAL_MACHINE, _X("SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search"), _X("DisableWebSearch"), 1);
@@ -111,7 +133,6 @@ namespace Aegis::Modules {
             apply(HKEY_LOCAL_MACHINE, _X("SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent"), _X("DisableWindowsConsumerFeatures"), 1);
             apply(HKEY_LOCAL_MACHINE, _X("SOFTWARE\\Policies\\Microsoft\\Windows\\System"), _X("EnableActivityFeed"), 0);
             apply(HKEY_CURRENT_USER, _X("Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo"), _X("Enabled"), 0);
-
             if (!dryRun) log.Log(Core::LogLevel::INFO, "DONE", "Registry policies enforced; ACLs were left unchanged because they are not journaled.");
         }
     };
