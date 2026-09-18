@@ -2,16 +2,39 @@
 #include "../Core/RAII.hpp"
 #include "../Core/Logger.hpp"
 #include "../Core/Obfuscation.hpp"
+#include "../Core/PolicyEngine.hpp"
 #include "../Core/State.hpp"
 #include "../Core/Utils.hpp"
 #include <windows.h>
 #include <string>
-#include <map>
 #include <utility>
+#include <vector>
 
 #pragma comment(lib, "advapi32.lib")
 
 namespace Aegis::Modules {
+    struct RegistryTarget {
+        HKEY root;
+        std::wstring path;
+        std::wstring key;
+        std::string id;
+        std::string view;
+        REGSAM sam;
+    };
+
+    inline std::vector<RegistryTarget> PrivacyRegistryTargets() {
+        return {
+            {HKEY_LOCAL_MACHINE, _X("SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection"), _X("AllowTelemetry"), "HKLM_AllowTelemetry", "64-bit", KEY_WOW64_64KEY},
+            {HKEY_LOCAL_MACHINE, _X("SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection"), _X("DisableDiagnosticDataViewer"), "HKLM_DisableDiagnosticDataViewer", "64-bit", KEY_WOW64_64KEY},
+            {HKEY_LOCAL_MACHINE, _X("SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search"), _X("DisableWebSearch"), "HKLM_DisableWebSearch", "64-bit", KEY_WOW64_64KEY},
+            {HKEY_LOCAL_MACHINE, _X("SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search"), _X("AllowCortana"), "HKLM_AllowCortana", "64-bit", KEY_WOW64_64KEY},
+            {HKEY_LOCAL_MACHINE, _X("SOFTWARE\\Policies\\Microsoft\\Windows\\OneDrive"), _X("DisableFileSyncNGSC"), "HKLM_DisableFileSyncNGSC", "64-bit", KEY_WOW64_64KEY},
+            {HKEY_LOCAL_MACHINE, _X("SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent"), _X("DisableWindowsConsumerFeatures"), "HKLM_DisableWindowsConsumerFeatures", "64-bit", KEY_WOW64_64KEY},
+            {HKEY_LOCAL_MACHINE, _X("SOFTWARE\\Policies\\Microsoft\\Windows\\System"), _X("EnableActivityFeed"), "HKLM_EnableActivityFeed", "64-bit", KEY_WOW64_64KEY},
+            {HKEY_CURRENT_USER, _X("Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo"), _X("Enabled"), "HKCU_AdvertisingInfo", "64-bit", KEY_WOW64_64KEY},
+        };
+    }
+
     class RegistryManager {
         Core::Logger& log;
 
@@ -19,20 +42,20 @@ namespace Aegis::Modules {
         explicit RegistryManager(Core::Logger& logger) : log(logger) {}
 
         void Snapshot(Core::SystemSnapshot& snapshot) {
-            auto read_val = [&](HKEY root, const std::wstring& path, const std::wstring& key, const std::string& snapshot_id) {
+            for (const auto& target : PrivacyRegistryTargets()) {
                 Core::RegistryState rs;
-                rs.fullPath = snapshot_id;
+                rs.fullPath = target.id;
                 rs.exists = false;
                 rs.type = REG_NONE;
-                rs.view = "64-bit";
+                rs.view = target.view;
                 HKEY raw_hk = nullptr;
-                if (RegOpenKeyExW(root, path.c_str(), 0, KEY_READ | KEY_WOW64_64KEY, &raw_hk) == ERROR_SUCCESS) {
+                if (RegOpenKeyExW(target.root, target.path.c_str(), 0, KEY_READ | target.sam, &raw_hk) == ERROR_SUCCESS) {
                     Core::RegHandle hk = Core::RegHandle::From(raw_hk);
                     DWORD type = REG_NONE, size = 0;
-                    if (RegQueryValueExW(hk.get(), key.c_str(), nullptr, &type, nullptr, &size) == ERROR_SUCCESS) {
+                    if (RegQueryValueExW(hk.get(), target.key.c_str(), nullptr, &type, nullptr, &size) == ERROR_SUCCESS) {
                         rs.type = type;
                         rs.data.resize(size);
-                        if (RegQueryValueExW(hk.get(), key.c_str(), nullptr, &type,
+                        if (RegQueryValueExW(hk.get(), target.key.c_str(), nullptr, &type,
                                 rs.data.empty() ? nullptr : rs.data.data(), &size) == ERROR_SUCCESS) {
                             rs.data.resize(size);
                             rs.exists = true;
@@ -41,9 +64,24 @@ namespace Aegis::Modules {
                         }
                     }
                 }
-                snapshot.registry[snapshot_id] = std::move(rs);
-            };
-            read_val(HKEY_LOCAL_MACHINE, _X("SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection"), _X("AllowTelemetry"), "HKLM_AllowTelemetry");
+                snapshot.registry[target.id] = std::move(rs);
+            }
+        }
+
+        bool Restore(Core::PolicyEngine& engine, const std::string& id, const Core::RegistryState& state) {
+            for (const auto& target : PrivacyRegistryTargets()) {
+                if (target.id != id) continue;
+                const REGSAM view = state.view == "32-bit" ? KEY_WOW64_32KEY : KEY_WOW64_64KEY;
+                const std::vector<BYTE> bytes(state.data.begin(), state.data.end());
+                if (!engine.RestoreRegistryValue(target.root, target.path, target.key, state.exists, state.type, bytes, view)) {
+                    log.Log(Core::LogLevel::ERR, "STATE", "Registry restore failed: " + id);
+                    return false;
+                }
+                log.Log(Core::LogLevel::INFO, "STATE", "Registry restore applied: " + id);
+                return true;
+            }
+            log.Log(Core::LogLevel::ERR, "STATE", "Registry restore refused unknown snapshot id: " + id);
+            return false;
         }
 
         void EnforcePolicies(bool dryRun) {
@@ -64,8 +102,7 @@ namespace Aegis::Modules {
                     }
                 }
             };
-            
-            // Comprehensive GPO suite
+
             apply(HKEY_LOCAL_MACHINE, _X("SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection"), _X("AllowTelemetry"), 0);
             apply(HKEY_LOCAL_MACHINE, _X("SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection"), _X("DisableDiagnosticDataViewer"), 1);
             apply(HKEY_LOCAL_MACHINE, _X("SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search"), _X("DisableWebSearch"), 1);
@@ -74,7 +111,7 @@ namespace Aegis::Modules {
             apply(HKEY_LOCAL_MACHINE, _X("SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent"), _X("DisableWindowsConsumerFeatures"), 1);
             apply(HKEY_LOCAL_MACHINE, _X("SOFTWARE\\Policies\\Microsoft\\Windows\\System"), _X("EnableActivityFeed"), 0);
             apply(HKEY_CURRENT_USER, _X("Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo"), _X("Enabled"), 0);
-            
+
             if (!dryRun) log.Log(Core::LogLevel::INFO, "DONE", "Registry policies enforced; ACLs were left unchanged because they are not journaled.");
         }
     };
