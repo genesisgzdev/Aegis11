@@ -47,7 +47,7 @@ int main() {
         const auto rejected = directory / "bad-schema.json";
         {
             std::ofstream out(rejected);
-            out << R"({\"schemaVersion\":\"9\",\"timestamp\":\"x\",\"osVersion\":\"10.0.1\",\"services\":{},\"registry\":{},\"tasks\":{}})";
+            out << R"({"schemaVersion":"9","timestamp":"x","osVersion":"10.0.1","services":{},"registry":{},"tasks":{}})";
         }
         require(!state.RestoreBaseline(rejected.string(), engine), "incompatible schema must fail");
         std::cout << "Native snapshot restore tests passed\n";
